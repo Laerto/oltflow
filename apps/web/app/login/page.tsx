@@ -2,6 +2,12 @@
 
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Server } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
   return (
@@ -41,60 +47,55 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-lg"
-      >
-        <div className="mb-6 text-center">
-          <h1 className="text-xl font-extrabold tracking-tight text-slate-900">
-            <span className="text-blue-600">neWave</span> OLT
-          </h1>
-          <p className="mt-1 text-xs text-slate-500">OLTFlow — Hyrje në sistem</p>
-        </div>
-
-        <label className="mb-3 block">
-          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
-            Email
-          </span>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-            placeholder="admin@oltflow.local"
-          />
-        </label>
-
-        <label className="mb-5 block">
-          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
-            Password
-          </span>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-            placeholder="••••••••"
-          />
-        </label>
-
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
-            ⚠ {error}
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-sm border-border/50 bg-card/95 p-0 shadow-2xl shadow-primary/10 backdrop-blur">
+        <CardHeader className="pb-2 pt-6 text-center">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground mb-2">
+            <Server className="h-6 w-6" />
           </div>
-        )}
+          <CardTitle className="text-xl font-extrabold tracking-tight">
+            <span className="text-primary">neWave</span> OLT
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">OLTFlow — Hyrje në sistem</p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-xs font-semibold uppercase text-muted-foreground">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@oltflow.local"
+              />
+            </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? "Duke hyrë..." : "Hyr"}
-        </button>
-      </form>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-xs font-semibold uppercase text-muted-foreground">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading ? "Duke hyrë..." : "Hyr"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
