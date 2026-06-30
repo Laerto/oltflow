@@ -1,0 +1,61 @@
+import { prisma } from "@oltflow/db";
+import { JOB_NAMES } from "@oltflow/core";
+import { enqueue } from "./queue.js";
+
+const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS ?? 60_000);
+const DETAIL_INTERVAL_MS = Number(process.env.DETAIL_INTERVAL_MS ?? 900_000); // 15 min
+const SIGNAL_INTERVAL_MS = Number(process.env.SIGNAL_INTERVAL_MS ?? 300_000);
+
+/** Spreads enqueue calls across a fraction of the tick interval instead of
+ * firing all at once, so e.g. 100 OLTs don't all open sessions in the same
+ * instant (BullMQ's `delay` option, no extra infra needed). */
+function jitter(intervalMs: number): number {
+  return Math.floor(Math.random() * Math.min(intervalMs / 4, 15_000));
+}
+
+async function tickInventory() {
+  const olts = await prisma.olt.findMany({ select: { id: true } });
+  for (const olt of olts) {
+    await enqueue(JOB_NAMES.syncInventory, { oltId: olt.id }, undefined, jitter(SYNC_INTERVAL_MS));
+  }
+}
+
+async function tickDetail() {
+  const olts = await prisma.olt.findMany({ select: { id: true } });
+  for (const olt of olts) {
+    await enqueue(JOB_NAMES.syncDetail, { oltId: olt.id }, undefined, jitter(DETAIL_INTERVAL_MS));
+  }
+}
+
+async function tickSignals() {
+  const olts = await prisma.olt.findMany({ select: { id: true } });
+  for (const olt of olts) {
+    await enqueue(JOB_NAMES.syncSignals, { oltId: olt.id }, undefined, jitter(SIGNAL_INTERVAL_MS));
+  }
+}
+
+/** Self-rescheduling loops (instead of setInterval) so a slow tick can't overlap the next one.
+ * Runs immediately on startup, then waits intervalMs between subsequent runs — otherwise a
+ * freshly-added OLT (or a worker restart) would sit with no detail/signal data for a full
+ * DETAIL_INTERVAL_MS/SIGNAL_INTERVAL_MS before the first pass ever ran. */
+function loop(fn: () => Promise<void>, intervalMs: number, label: string) {
+  const run = async () => {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`[scheduler] ${label} failed:`, err);
+    } finally {
+      setTimeout(run, intervalMs);
+    }
+  };
+  run();
+}
+
+export function startScheduler() {
+  loop(tickInventory, SYNC_INTERVAL_MS, "sync-inventory");
+  loop(tickDetail, DETAIL_INTERVAL_MS, "sync-detail");
+  loop(tickSignals, SIGNAL_INTERVAL_MS, "sync-signals");
+  console.log(
+    `[scheduler] inventory every ${SYNC_INTERVAL_MS}ms, detail every ${DETAIL_INTERVAL_MS}ms, signals every ${SIGNAL_INTERVAL_MS}ms`
+  );
+}

@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Olt" ADD COLUMN     "eponSlots" INTEGER[] DEFAULT ARRAY[]::INTEGER[];

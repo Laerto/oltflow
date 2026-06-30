@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Olt {
+  id          Int       @id @default(autoincrement())
+  name        String
+  ip          String    @unique
+  port        Int       @default(23)
+  protocol    String    @default("telnet") // telnet | ssh
+  username    String
+  passwordEnc String // AES-256-GCM encrypted, see @oltflow/core crypto
+  location    String?
+  vendor      String    @default("zte")
+  model       String? // C300 | C320
+  slots       Int[]     @default([4, 15, 17, 19, 20]) // GPON board slots
+  eponSlots   Int[]     @default([]) // EPON board slots (ETTO/ETTOK cards) — empty if none, e.g. pure-GPON OLTs
+  snmpCommunity String? @default("public")
+  snmpVersion   String? @default("2c") // 2c | v3 (v3 not implemented yet)
+  snmpPort      Int     @default(161)
+  status      String    @default("unknown") // online | offline | unknown
+  lastSync    DateTime?
+  onus        Onu[]
+  jobs        Job[]
+  auditLogs   AuditLog[]
+  createdAt   DateTime  @default(now())
+}
+
+model Onu {
+  id             Int       @id @default(autoincrement())
+  oltId          Int
+  olt            Olt       @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  ponPort        String // gpon-onu_1/15/1:1
+  serial         String?
+  name           String?
+  type           String?
+  state          String? // working | fail | offline ...
+  distance       String?
+  onlineDuration String?
+  vlan           String?
+  pppoeUser      String?
+  lineProfile    String?
+  serviceProfile String?
+  lastSeen       DateTime?
+  signals        Signal[]
+
+  @@unique([oltId, ponPort])
+  @@index([serial])
+  @@index([state])
+}
+
+model Signal {
+  id          BigInt   @id @default(autoincrement())
+  onuId       Int
+  onu         Onu      @relation(fields: [onuId], references: [id], onDelete: Cascade)
+  oltRx       Float?
+  onuRx       Float?
+  oltTx       Float?
+  onuTx       Float?
+  attenUp     Float?
+  attenDown   Float?
+  signalLevel String? // good | warning | critical
+  recordedAt  DateTime @default(now())
+
+  @@index([onuId, recordedAt])
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  passwordH String
+  role      String   @default("operator") // admin | operator | viewer
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  userId    Int?
+  action    String // authorize_onu | set_pppoe | wifi_update | add_olt ...
+  oltId     Int?
+  olt       Olt?     @relation(fields: [oltId], references: [id], onDelete: SetNull)
+  ponPort   String?
+  payload   Json? // sanitized (no plaintext passwords)
+  result    String? // success | error
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+}
+
+model Job {
+  id        String   @id // matches BullMQ job id
+  type      String
+  status    String   @default("queued") // queued | active | done | failed
+  oltId     Int?
+  olt       Olt?     @relation(fields: [oltId], references: [id], onDelete: SetNull)
+  ponPort   String?
+  payload   Json?
+  output    String? // raw device output (troubleshooting)
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
