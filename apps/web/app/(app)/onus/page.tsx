@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useOlts } from "../providers";
@@ -26,6 +26,14 @@ function matchesFilter(o: OnuRow, filter: Filter): boolean {
 }
 
 export default function OnusPage() {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-sm text-slate-500">Duke ngarkuar...</div>}>
+      <OnusContent />
+    </Suspense>
+  );
+}
+
+function OnusContent() {
   const { currentOlt } = useOlts();
   const searchParams = useSearchParams();
   const filter = (searchParams.get("filter") as Filter) ?? null;

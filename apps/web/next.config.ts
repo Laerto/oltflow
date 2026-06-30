@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@oltflow/core", "@oltflow/adapters"],
   // Prisma's generated client ships a native query-engine binary that must stay
   // an external `require()` at runtime, not get traced/bundled by Turbopack/webpack.
-  serverExternalPackages: ["@prisma/client", "@oltflow/db"],
+  serverExternalPackages: ["@prisma/client", "@oltflow/db", "ssh2"],
   outputFileTracingRoot: path.join(__dirname, "../.."),
   turbopack: {
     // Turbopack only resolves modules within this root; without it, the
