@@ -54,9 +54,9 @@ function LoginForm() {
             <Server className="h-6 w-6" />
           </div>
           <CardTitle className="text-xl font-extrabold tracking-tight">
-            <span className="text-primary">neWave</span> OLT
+            <span className="text-primary">OLT</span>Flow
           </CardTitle>
-          <p className="text-xs text-muted-foreground">OLTFlow — Hyrje në sistem</p>
+          <p className="text-xs text-muted-foreground">Hyrje në sistem</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">

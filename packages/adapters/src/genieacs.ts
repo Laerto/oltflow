@@ -16,6 +16,18 @@ export interface WifiDevice {
 
 type GenieDevice = Record<string, unknown>;
 
+/** Builds a GenieACS NBI `/devices` URL, optionally narrowing the response with a
+ * MongoDB-style `query` filter and a `projection` (comma-separated parameter paths).
+ * Projection is critical at scale: without it GenieACS returns each device's *entire*
+ * TR-069 parameter tree, so a list page would download tens of MB per request. */
+function devicesUrl(genieacsUrl: string, opts?: { query?: object; projection?: string }): string {
+  const qs = new URLSearchParams();
+  if (opts?.query) qs.set("query", JSON.stringify(opts.query));
+  if (opts?.projection) qs.set("projection", opts.projection);
+  const suffix = qs.toString();
+  return `${genieacsUrl}/devices${suffix ? `?${suffix}` : ""}`;
+}
+
 function deepGet(obj: unknown, ...path: string[]): unknown {
   let cur: unknown = obj;
   for (const key of path) {
@@ -33,7 +45,8 @@ export async function getWanIpsBySerial(genieacsUrl: string, serials: string[]):
   const wanted = serials.filter(Boolean).map((s) => s.toUpperCase());
   if (!wanted.length) return result;
 
-  const res = await fetch(`${genieacsUrl}/devices`);
+  // Only fetch the WAN subtree we actually read below — not every device's full param tree.
+  const res = await fetch(devicesUrl(genieacsUrl, { projection: "_id,InternetGatewayDevice.WANDevice" }));
   if (!res.ok) throw new Error(`GenieACS /devices dështoi: ${res.status}`);
   const devices = (await res.json()) as GenieDevice[];
 
@@ -66,10 +79,17 @@ function extractWanIp(d: GenieDevice): string | undefined {
 }
 
 export async function getWifiInfo(genieacsUrl: string, serial: string): Promise<WifiDevice[]> {
-  const res = await fetch(`${genieacsUrl}/devices`);
+  const sn = serial.toUpperCase();
+  // Let GenieACS filter by serial (device ids embed the SN) and return only the LAN/WiFi
+  // subtree, instead of pulling every device's full tree and scanning client-side.
+  const res = await fetch(
+    devicesUrl(genieacsUrl, {
+      query: { _id: { $regex: sn } },
+      projection: "_id,InternetGatewayDevice.LANDevice",
+    })
+  );
   if (!res.ok) throw new Error(`GenieACS /devices dështoi: ${res.status}`);
   const devices = (await res.json()) as GenieDevice[];
-  const sn = serial.toUpperCase();
   const result: WifiDevice[] = [];
 
   for (const d of devices) {

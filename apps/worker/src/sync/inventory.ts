@@ -1,8 +1,8 @@
 import { prisma } from "@oltflow/db";
-import { scanOltState, scanOltEponState, scanOltInventory } from "@oltflow/adapters";
+import { scanOltState, scanOltEponState, scanOltInventory, scanUnconfigured } from "@oltflow/adapters";
 import { DEFAULT_PORTS_PER_SLOT, DEFAULT_EPON_PORTS_PER_SLOT } from "@oltflow/core";
 import { loadOlt, toCreds } from "../olt-creds.js";
-import { batchUpsertOnus } from "../persist.js";
+import { batchUpsertOnus, reconcileUnconfigured } from "../persist.js";
 import { withOltLock, OltBusyError } from "../olt-lock.js";
 
 /** Fast pass — state only, safe to run every SYNC_INTERVAL_MS even with
@@ -12,13 +12,17 @@ import { withOltLock, OltBusyError } from "../olt-lock.js";
 export async function syncOltInventory(oltId: number): Promise<number> {
   const olt = await loadOlt(oltId);
   try {
-    const rows = await withOltLock(olt.id, async () => {
+    // One device session per tick covers both inventory state and the unconfigured
+    // (waiting-authorization) scan, so the "waiting" count stays continuously accurate
+    // without a separate on-demand scan that would add network round-trips / delay.
+    const { rows, uncfg } = await withOltLock(olt.id, async () => {
       const creds = toCreds(olt);
       const gponRows = await scanOltState(creds, olt.slots, DEFAULT_PORTS_PER_SLOT);
       const eponRows = olt.eponSlots.length
         ? await scanOltEponState(creds, olt.eponSlots, DEFAULT_EPON_PORTS_PER_SLOT)
         : [];
-      return [...gponRows, ...eponRows];
+      const uncfg = await scanUnconfigured(creds);
+      return { rows: [...gponRows, ...eponRows], uncfg };
     });
 
     await batchUpsertOnus(
@@ -28,6 +32,7 @@ export async function syncOltInventory(oltId: number): Promise<number> {
         fields: row.serial ? { state: row.state, serial: row.serial } : { state: row.state },
       }))
     );
+    await reconcileUnconfigured(olt.id, uncfg);
 
     await prisma.olt.update({ where: { id: olt.id }, data: { status: "online", lastSync: new Date() } });
     return rows.length;

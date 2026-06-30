@@ -7,35 +7,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const oltId = Number(id);
 
-  const [total, online, offline, criticalOnuIds, warningOnuIds] = await Promise.all([
+  const [total, online, recentSignals] = await Promise.all([
     prisma.onu.count({ where: { oltId } }),
     prisma.onu.count({ where: { oltId, state: "working" } }),
-    prisma.onu.count({ where: { oltId, state: { not: "working" } } }),
+    // Both signal levels in one pass; distinct per ONU so an ONU logging several rows in
+    // the window is counted once. Served by the new [signalLevel, recordedAt] index.
     prisma.signal.findMany({
       where: {
-        signalLevel: "critical",
+        signalLevel: { in: ["warning", "critical"] },
         recordedAt: { gt: new Date(Date.now() - 10 * 60 * 1000) },
         onu: { oltId },
       },
-      select: { onuId: true },
-      distinct: ["onuId"],
-    }),
-    prisma.signal.findMany({
-      where: {
-        signalLevel: "warning",
-        recordedAt: { gt: new Date(Date.now() - 10 * 60 * 1000) },
-        onu: { oltId },
-      },
-      select: { onuId: true },
-      distinct: ["onuId"],
+      select: { onuId: true, signalLevel: true },
+      distinct: ["onuId", "signalLevel"],
     }),
   ]);
 
   return NextResponse.json({
     total,
     online,
-    offline,
-    criticalSignal: criticalOnuIds.length,
-    warningSignal: warningOnuIds.length,
+    offline: total - online,
+    criticalSignal: recentSignals.filter((s) => s.signalLevel === "critical").length,
+    warningSignal: recentSignals.filter((s) => s.signalLevel === "warning").length,
   });
 }

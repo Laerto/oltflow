@@ -9,6 +9,7 @@ export const JOB_NAMES = {
   authorizePppoe: "authorize-pppoe",
   wifi: "wifi",
   replaceOnu: "replace-onu",
+  deleteOnu: "delete-onu",
   rebootOnu: "reboot-onu",
   syncInventory: "sync-inventory",
   syncDetail: "sync-detail",
@@ -64,6 +65,11 @@ export interface ReplaceOnuPayload {
   ponPort: string;
   onuSerial: string;
   onuType: string;
+}
+export interface DeleteOnuPayload {
+  oltId: number;
+  onuId: number;
+  ponPort: string;
 }
 export interface RebootOnuPayload {
   onuId: number;

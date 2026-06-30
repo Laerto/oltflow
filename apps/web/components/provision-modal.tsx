@@ -103,7 +103,7 @@ export function ProvisionModal({
           </div>
 
           <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Informacioni ONU</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Emri Klientit *</Label>
               <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="KLIENTI EMRI MBIEMRI" />
@@ -122,7 +122,7 @@ export function ProvisionModal({
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">TCONT Profile</Label>
               <Select value={tcontProfile} onValueChange={setTcontProfile}>
@@ -145,7 +145,7 @@ export function ProvisionModal({
           <div className="h-px bg-border" />
 
           <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Kredencialet PPPoE</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Username ISP</Label>
               <Input value={pppoeUser} onChange={(e) => setPppoeUser(e.target.value)} placeholder="user@isp.al" />
@@ -167,14 +167,14 @@ export function ProvisionModal({
             </Alert>
           )}
 
-          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+          <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
+            <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
               Anulo
             </Button>
-            <Button type="submit" variant="outline" disabled={loading !== null}>
+            <Button type="submit" variant="outline" disabled={loading !== null} className="w-full sm:w-auto">
               {loading === "auth" ? "Duke autorizuar..." : "Vetëm Autorizo"}
             </Button>
-            <Button type="button" onClick={(e) => run("both", e)} disabled={loading !== null} className="bg-gradient-to-r from-blue-600 to-green-600 text-white hover:opacity-90">
+            <Button type="button" onClick={(e) => run("both", e)} disabled={loading !== null} className="w-full bg-gradient-to-r from-blue-600 to-green-600 text-white hover:opacity-90 sm:w-auto">
               {loading === "both" ? "Duke procesuar..." : "Autorizo + PPPoE"}
             </Button>
           </div>

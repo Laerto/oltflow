@@ -8,33 +8,40 @@ const OLT_CRED_KEY = process.env.OLT_CRED_KEY ?? "";
 
 export async function GET() {
   await requireUser();
-  const olts = await prisma.olt.findMany({
-    orderBy: { name: "asc" },
-    include: { _count: { select: { onus: true } } },
-  });
+  // Two flat queries instead of 1 + N counts: list the OLTs, then roll up ONU
+  // totals/online counts for all of them in a single grouped aggregate.
+  const [olts, grouped] = await Promise.all([
+    prisma.olt.findMany({ orderBy: { name: "asc" } }),
+    prisma.onu.groupBy({ by: ["oltId", "state"], _count: { _all: true } }),
+  ]);
 
-  const withCounts = await Promise.all(
-    olts.map(async (olt) => {
-      const online = await prisma.onu.count({ where: { oltId: olt.id, state: "working" } });
-      const offline = olt._count.onus - online;
-      return {
-        id: olt.id,
-        name: olt.name,
-        ip: olt.ip,
-        port: olt.port,
-        protocol: olt.protocol,
-        username: olt.username,
-        slots: olt.slots,
-        eponSlots: olt.eponSlots,
-        location: olt.location,
-        status: olt.status,
-        lastSync: olt.lastSync,
-        total: olt._count.onus,
-        online,
-        offline,
-      };
-    })
-  );
+  const totals = new Map<number, { total: number; online: number }>();
+  for (const row of grouped) {
+    const acc = totals.get(row.oltId) ?? { total: 0, online: 0 };
+    acc.total += row._count._all;
+    if (row.state === "working") acc.online += row._count._all;
+    totals.set(row.oltId, acc);
+  }
+
+  const withCounts = olts.map((olt) => {
+    const { total, online } = totals.get(olt.id) ?? { total: 0, online: 0 };
+    return {
+      id: olt.id,
+      name: olt.name,
+      ip: olt.ip,
+      port: olt.port,
+      protocol: olt.protocol,
+      username: olt.username,
+      slots: olt.slots,
+      eponSlots: olt.eponSlots,
+      location: olt.location,
+      status: olt.status,
+      lastSync: olt.lastSync,
+      total,
+      online,
+      offline: total - online,
+    };
+  });
 
   return NextResponse.json({ olts: withCounts });
 }

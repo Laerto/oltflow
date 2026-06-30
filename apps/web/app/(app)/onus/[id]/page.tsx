@@ -110,7 +110,7 @@ export default function OnuDetailPage() {
     );
   }
 
-  if (!onu) return <Card><div className="p-6 text-sm text-slate-500">ONU nuk u gjet.</div></Card>;
+  if (!onu) return <Card><div className="p-6 text-sm text-muted-foreground">ONU nuk u gjet.</div></Card>;
 
   const hasSignal = onu.onuRx !== null;
   const epon = isEponPort(onu.ponPort);
@@ -120,21 +120,21 @@ export default function OnuDetailPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="mb-1.5 flex items-center gap-2 text-xs text-slate-500">
-            <button onClick={() => router.push("/onus")} className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 hover:bg-slate-50">
+          <div className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+            <button onClick={() => router.push("/onus")} className="flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 hover:bg-muted">
               <ChevronLeft className="h-3 w-3" /> Kthehu
             </button>
             <span>ONU-të &gt; {onu.ponPort}</span>
           </div>
-          <div className="text-xl font-bold text-slate-900">{onu.name || onu.ponPort}</div>
-          <div className="mt-0.5 text-xs text-slate-500">
+          <div className="text-xl font-bold text-foreground">{onu.name || onu.ponPort}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
             {onu.ponPort} · {onu.type || "–"} · SN: {onu.serial || "N/A"}
             {epon && <> · <Badge variant="secondary">EPON</Badge></>}
             {connectionKind === "bridge" && <> · <Badge variant="secondary">Bridge</Badge></>}
             {connectionKind === "route" && <> · <Badge variant="secondary">Route</Badge></>}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Button variant="secondary" onClick={doRefresh} disabled={refreshing || epon} title={epon ? "Rifreskimi CLI nuk është ende i implementuar për EPON" : undefined}>
             {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Rifresko nga OLT
           </Button>
@@ -161,7 +161,7 @@ export default function OnuDetailPage() {
             <InfoRow label="Tipi ONU" value={<Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-600">{onu.type || "N/A"}</Badge>} />
             <InfoRow label="Serial Number" value={<span className="font-mono">{onu.serial || "N/A"}</span>} />
             <InfoRow label="ONU Distance" value={onu.distance || "N/A"} />
-            <InfoRow label="Online Duration" value={<span className="text-green-600">{onu.onlineDuration || "N/A"}</span>} />
+            <InfoRow label="Online Duration" value={<span className="text-emerald-600">{onu.onlineDuration || "N/A"}</span>} />
             <InfoRow label="Line Profile" value={<Badge>{onu.lineProfile || "N/A"}</Badge>} />
             <InfoRow label="Service Profile" value={<Badge>{onu.serviceProfile || "N/A"}</Badge>} />
             <InfoRow label="VLAN" value={<Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-600">{onu.vlan || "N/A"}</Badge>} />
@@ -173,27 +173,27 @@ export default function OnuDetailPage() {
             <div className="p-4">
               {hasSignal ? (
                 <>
-                  <div className="mb-2.5 grid grid-cols-4 gap-2">
+                  <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <SigBox label="ONU RX dBm" value={onu.onuRx} color={signalColor(onu.onuRx)} />
-                    <SigBox label="ONU TX dBm" value={onu.onuTx} color="text-green-600" />
-                    <SigBox label="OLT RX dBm" value={onu.oltRx} color="text-green-600" />
-                    <SigBox label="OLT TX dBm" value={onu.oltTx} color="text-green-600" />
+                    <SigBox label="ONU TX dBm" value={onu.onuTx} color="text-emerald-600" />
+                    <SigBox label="OLT RX dBm" value={onu.oltRx} color="text-emerald-600" />
+                    <SigBox label="OLT TX dBm" value={onu.oltTx} color="text-emerald-600" />
                   </div>
                   <div className="flex gap-2 text-[11px]">
-                    <div className="flex-1 rounded-md bg-slate-50 px-3 py-2">
-                      <span className="text-slate-500">Att UP</span>
+                    <div className="flex-1 rounded-md bg-muted px-3 py-2">
+                      <span className="text-muted-foreground">Att UP</span>
                       <br />
                       <b>{onu.attenUp} dB</b>
                     </div>
-                    <div className="flex-1 rounded-md bg-slate-50 px-3 py-2">
-                      <span className="text-slate-500">Att DOWN</span>
+                    <div className="flex-1 rounded-md bg-muted px-3 py-2">
+                      <span className="text-muted-foreground">Att DOWN</span>
                       <br />
                       <b>{onu.attenDown} dB</b>
                     </div>
                   </div>
                 </>
               ) : (
-                <div className="text-xs text-slate-400">Sinjali nuk disponohet — kliko &ldquo;Rifresko nga OLT&rdquo;</div>
+                <div className="text-xs text-muted-foreground">Sinjali nuk disponohet — kliko &ldquo;Rifresko nga OLT&rdquo;</div>
               )}
             </div>
           </SectionCard>
@@ -205,18 +205,18 @@ export default function OnuDetailPage() {
             <div className="px-4">
               <InfoRow label="WAN Mode" value={onu.pppoeUser ? "PPPoE" : "Profile (OMCI)"} />
               <InfoRow label="PPPoE User" value={onu.pppoeUser ? <span className="font-mono text-blue-600">{onu.pppoeUser}</span> : "–"} />
-              <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-slate-400">rifresko për ta parë</span>} />
+              <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-muted-foreground">rifresko për ta parë</span>} />
             </div>
           </SectionCard>
         </div>
       </div>
 
       {live?.history && (
-        <SectionCard title={<><CalendarDays className="inline h-4 w-4" /> Historia e Lidhjes <span className="text-[11px] font-normal text-slate-400">{live.history.length} ngjarje</span></>} className="mt-4">
+        <SectionCard title={<><CalendarDays className="inline h-4 w-4" /> Historia e Lidhjes <span className="text-[11px] font-normal text-muted-foreground">{live.history.length} ngjarje</span></>} className="mt-4">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] font-bold uppercase text-slate-500">
+                <tr className="border-b border-border bg-muted text-left text-[10px] font-bold uppercase text-muted-foreground">
                   <th className="px-3.5 py-2">#</th>
                   <th className="px-3.5 py-2">Auth Time</th>
                   <th className="px-3.5 py-2">Offline Time</th>
@@ -225,7 +225,7 @@ export default function OnuDetailPage() {
               </thead>
               <tbody>
                 {live.history.map((h, i) => (
-                  <tr key={i} className="border-b border-slate-100 last:border-0">
+                  <tr key={i} className="border-b border-border/50 last:border-0">
                     <td className="px-3.5 py-2">{i + 1}</td>
                     <td className="px-3.5 py-2 font-mono text-xs">{h.authTime}</td>
                     <td className="px-3.5 py-2 font-mono text-xs">{h.offlineTime}</td>
@@ -252,9 +252,9 @@ export default function OnuDetailPage() {
       >
         <div className="p-4">
           {!onu.serial ? (
-            <div className="text-xs text-slate-400">Nuk ka TR-069</div>
+            <div className="text-xs text-muted-foreground">Nuk ka TR-069</div>
           ) : !wifi ? (
-            <div className="text-xs text-slate-400">WiFi nuk disponohet</div>
+            <div className="text-xs text-muted-foreground">WiFi nuk disponohet</div>
           ) : (
             <div className="flex gap-3">
               <WifiBand label="2.4 GHz" band={wifi.wlan2g} />
@@ -319,8 +319,8 @@ function SectionCard({
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex items-center border-b border-slate-100 py-2 text-[13px] last:border-0">
-      <span className="w-[150px] flex-shrink-0 text-xs text-slate-500">{label}</span>
+    <div className="flex items-center border-b border-border/50 py-2 text-[13px] last:border-0">
+      <span className="w-[150px] flex-shrink-0 text-xs text-muted-foreground">{label}</span>
       <span className="flex-1 font-medium">{value}</span>
     </div>
   );
@@ -328,17 +328,17 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
 
 function SigBox({ label, value, color }: { label: string; value: number | null; color: string }) {
   return (
-    <div className="flex-1 rounded-lg bg-slate-50 p-3 text-center">
+    <div className="flex-1 rounded-lg bg-muted p-3 text-center">
       <div className={`font-mono text-base font-bold ${color}`}>{value}</div>
-      <div className="mt-0.5 text-[9px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{label}</div>
     </div>
   );
 }
 
 function WifiBand({ label, band }: { label: string; band?: { ssid: string; password: string; enabled: boolean } }) {
   return (
-    <div className="flex-1 rounded-lg border border-slate-200 p-3">
-      <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500"><Satellite className="inline h-3 w-3" /> {label}</div>
+    <div className="flex-1 rounded-lg border border-border p-3">
+      <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"><Satellite className="inline h-3 w-3" /> {label}</div>
       <InfoRowSm label="SSID" value={<strong>{band?.ssid || "N/A"}</strong>} />
       <InfoRowSm label="Password" value={band?.password ? <span className="font-mono">{band.password}</span> : "N/A"} />
       <InfoRowSm label="Status" value={<Badge variant={band?.enabled ? "default" : "destructive"}>{band?.enabled ? "Aktiv" : "Off"}</Badge>} />
@@ -349,15 +349,15 @@ function WifiBand({ label, band }: { label: string; band?: { ssid: string; passw
 function InfoRowSm({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center py-1 text-xs">
-      <span className="w-20 flex-shrink-0 text-slate-500">{label}</span>
+      <span className="w-20 flex-shrink-0 text-muted-foreground">{label}</span>
       <span>{value}</span>
     </div>
   );
 }
 
 function signalColor(rx: number | null): string {
-  if (rx === null) return "text-slate-400";
-  if (rx >= -25) return "text-green-600";
+  if (rx === null) return "text-muted-foreground";
+  if (rx >= -25) return "text-emerald-600";
   if (rx >= -27) return "text-amber-600";
-  return "text-red-600";
+  return "text-rose-600";
 }

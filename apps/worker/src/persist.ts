@@ -35,6 +35,29 @@ export async function batchUpsertOnus(
   }
 }
 
+/** Reconciles the persisted unconfigured-ONU set for an OLT against a fresh
+ * `show gpon onu uncfg` scan: removes serials that are gone (authorized or
+ * physically detached) and upserts the ones seen now. Keeps the "waiting
+ * authorization" count accurate from the DB without an on-demand device scan. */
+export async function reconcileUnconfigured(
+  oltId: number,
+  rows: { ponPort: string; serial: string; state: string }[]
+): Promise<void> {
+  const serials = rows.map((r) => r.serial);
+  await prisma.$transaction([
+    serials.length
+      ? prisma.uncfgOnu.deleteMany({ where: { oltId, serial: { notIn: serials } } })
+      : prisma.uncfgOnu.deleteMany({ where: { oltId } }),
+    ...rows.map((r) =>
+      prisma.uncfgOnu.upsert({
+        where: { oltId_serial: { oltId, serial: r.serial } },
+        create: { oltId, ponPort: r.ponPort, serial: r.serial, state: r.state },
+        update: { ponPort: r.ponPort, state: r.state, lastSeen: new Date() },
+      })
+    ),
+  ]);
+}
+
 export interface SignalFields {
   oltRx?: number;
   onuRx?: number;

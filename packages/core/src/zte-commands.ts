@@ -24,6 +24,10 @@ export interface ReplaceOnuParams {
   onuType: string;
 }
 
+export interface DeleteOnuParams {
+  pon: PonPort;
+}
+
 /** The exact ZTE C300/C320 provisioning recipe from main.py, kept verbatim. */
 export function buildAuthorizeOnuCommands(p: AuthorizeOnuParams): string[] {
   const vlan = p.vlanId ?? DEFAULT_VLAN_ID;
@@ -103,6 +107,24 @@ export function buildReplaceOnuCommands(p: ReplaceOnuParams): string[] {
     `interface ${olt}`,
     `no onu ${p.pon.onuId}`,
     `onu ${p.pon.onuId} type ${p.onuType} sn ${p.onuSerial}`,
+    "exit",
+  ];
+}
+
+/**
+ * Fully de-provisions an ONU: drops into the parent OLT interface and removes the
+ * onu-id with `no onu <id>`, which tears down its tcont/gemport/service-port/
+ * pon-onu-mng config and PPPoE on the device. Unlike replace, nothing is re-added —
+ * after `write` the port slot is free and the ONU reappears as unconfigured if it's
+ * still physically connected.
+ */
+export function buildDeleteOnuCommands(p: DeleteOnuParams): string[] {
+  const olt = oltInterface(p.pon);
+  return [
+    "enable",
+    "configure terminal",
+    `interface ${olt}`,
+    `no onu ${p.pon.onuId}`,
     "exit",
   ];
 }

@@ -1,0 +1,10 @@
+import { Queue } from "bullmq";
+import { randomUUID } from "node:crypto";
+import { prisma } from "@oltflow/db";
+const u = new URL(process.env.REDIS_URL ?? "redis://redis:6379");
+const q = new Queue("oltflow-jobs", { connection: { host: u.hostname, port: Number(u.port||6379), password: u.password||undefined, maxRetriesPerRequest: null } });
+const id = randomUUID();
+await prisma.job.create({ data: { id, type: "pppoe", status: "queued", oltId: 10, ponPort: "gpon-onu_1/15/15:1", payload: {} } });
+await q.add("pppoe", { oltId: 10, ponPort: "gpon-onu_1/15/15:1", pppoeUsername: "test1", pppoePassword: "test1", vlanId: 40, jobRowId: id }, { jobId: id });
+console.log("enqueued pppoe job", id);
+await q.close(); process.exit(0);

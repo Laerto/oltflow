@@ -6,6 +6,22 @@ export interface UncfgOnu {
   state: string;
 }
 
+/**
+ * ZTE C300/C320 CLI reports rejected commands with a `%Error <code>: <text>` line
+ * (e.g. `%Error 20204: Ambiguous command`). Returns the joined error text if the
+ * output contains any such line, else null. Write operations (authorize/pppoe/...)
+ * use this to FAIL the job with the device's real message instead of reporting a
+ * false success when the device silently rejected the commands.
+ */
+export function extractZteError(output: string): string | null {
+  const errors: string[] = [];
+  for (const rawLine of output.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (/^%Error\b/i.test(line)) errors.push(line.replace(/\s+/g, " "));
+  }
+  return errors.length ? errors.join(" | ") : null;
+}
+
 /** Parses `show gpon onu uncfg` output. */
 export function parseUncfg(raw: string): UncfgOnu[] {
   const onus: UncfgOnu[] = [];

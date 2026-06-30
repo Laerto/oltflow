@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { RefreshCw, Search, Eye, Lock } from "lucide-react";
+import { RefreshCw, Search, Eye, Lock, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { useOlts } from "../providers";
 import { api, type OnuRow } from "@/lib/api";
 import { formatPonPort, isEponPort, onuConnectionKind } from "@oltflow/core";
 import { PppoeModal } from "@/components/pppoe-modal";
+import { DeleteOnuDialog } from "@/components/delete-onu-dialog";
 
 type Filter = "online" | "offline" | "low-signal" | null;
 
@@ -50,6 +51,7 @@ function OnusContent() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [pppoeTarget, setPppoeTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<OnuRow | null>(null);
 
   async function load() {
     if (!currentOlt) return;
@@ -125,7 +127,51 @@ function OnusContent() {
           <EmptyState>Asnjë ONU</EmptyState>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <>
+        {/* Mobile: stacked cards (the wide table is unusable on a phone) */}
+        <div className="space-y-2.5 md:hidden">
+          {filtered.map((o) => (
+            <Card key={o.id} className="p-3.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold">{o.name || "–"}</div>
+                  <div className="mt-0.5 font-mono text-[11px] text-primary">
+                    {formatPonPort(o.ponPort)} {isEponPort(o.ponPort) && <Badge variant="secondary">EPON</Badge>}
+                  </div>
+                  <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">{o.serial || "–"}</div>
+                </div>
+                <StatusBadge state={o.state} />
+              </div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <SignalPill rx={o.onuRx} />
+                <Badge variant="secondary">{o.type || "–"}</Badge>
+                {o.wanIp && (
+                  <a href={`http://${o.wanIp}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[11px] text-primary hover:underline">
+                    {o.wanIp} ↗
+                  </a>
+                )}
+                {o.onlineDuration && <span className="text-[11px] text-muted-foreground">{o.onlineDuration}</span>}
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button asChild size="sm" variant="secondary">
+                  <Link href={`/onus/${o.id}`}>
+                    <Eye className="mr-1 h-4 w-4" /> Detaje
+                  </Link>
+                </Button>
+                {!isEponPort(o.ponPort) ? (
+                  <Button size="sm" onClick={() => setPppoeTarget(o.ponPort)}>
+                    <Lock className="mr-1 h-4 w-4" /> PPPoE
+                  </Button>
+                ) : (
+                  <span />
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Desktop: full table */}
+        <div className="hidden overflow-x-auto rounded-md border md:block">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -185,9 +231,14 @@ function OnusContent() {
                         </Link>
                       </Button>
                       {!isEponPort(o.ponPort) && (
-                        <Button variant="secondary" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setPppoeTarget(o.ponPort)}>
-                          <Lock className="mr-1 h-3.5 w-3.5" /> PPPoE
-                        </Button>
+                        <>
+                          <Button variant="secondary" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setPppoeTarget(o.ponPort)}>
+                            <Lock className="mr-1 h-3.5 w-3.5" /> PPPoE
+                          </Button>
+                          <Button variant="destructive" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setDeleteTarget(o)}>
+                            <Trash2 className="mr-1 h-3.5 w-3.5" /> Fshi
+                          </Button>
+                        </>
                       )}
                     </div>
                   </TableCell>
@@ -196,10 +247,22 @@ function OnusContent() {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
 
       {pppoeTarget && (
         <PppoeModal open oltId={currentOlt.id} ponPort={pppoeTarget} onClose={() => setPppoeTarget(null)} onDone={load} />
+      )}
+
+      {deleteTarget && (
+        <DeleteOnuDialog
+          open
+          onuId={deleteTarget.id}
+          ponPort={deleteTarget.ponPort}
+          name={deleteTarget.name}
+          onClose={() => setDeleteTarget(null)}
+          onDone={load}
+        />
       )}
     </div>
   );

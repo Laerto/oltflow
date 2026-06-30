@@ -15,6 +15,7 @@ import { handleAuthorizePppoe } from "./handlers/authorizePppoe.js";
 import { handleWifi } from "./handlers/wifi.js";
 import { handleSnmpDiscover } from "./handlers/snmpDiscover.js";
 import { handleReplaceOnu } from "./handlers/replaceOnu.js";
+import { handleDeleteOnu } from "./handlers/deleteOnu.js";
 import { handleRebootOnu } from "./handlers/rebootOnu.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,6 +31,7 @@ const HANDLERS: Record<string, Handler> = {
   [JOB_NAMES.wifi]: handleWifi,
   [JOB_NAMES.snmpDiscover]: handleSnmpDiscover,
   [JOB_NAMES.replaceOnu]: handleReplaceOnu,
+  [JOB_NAMES.deleteOnu]: handleDeleteOnu,
   [JOB_NAMES.rebootOnu]: handleRebootOnu,
 };
 

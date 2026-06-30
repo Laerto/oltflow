@@ -27,7 +27,7 @@ export function AppSidebar({
           <Server className="h-5 w-5" />
         </div>
         <span className="text-lg font-extrabold tracking-tight">
-          <span className="text-primary">neWave</span> OLT
+          <span className="text-primary">OLT</span>Flow
         </span>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">

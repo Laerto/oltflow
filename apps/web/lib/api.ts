@@ -45,6 +45,7 @@ export const api = {
     ),
   onus: (oltId: number) => request<{ onus: OnuRow[]; total: number }>(`/api/olts/${oltId}/onus`),
   onu: (onuId: number) => request<OnuRow & { oltId: number; oltName: string }>(`/api/onus/${onuId}`),
+  unconfigured: (oltId: number) => request<{ onus: UncfgOnu[]; total: number }>(`/api/olts/${oltId}/unconfigured`),
   scanUnconfigured: (oltId: number) => request<{ jobId: string }>(`/api/olts/${oltId}/scan-unconfigured`, { method: "POST" }),
   signalHistory: (onuId: number) =>
     request<{ history: { onuRx: number | null; oltRx: number | null; signalLevel: string | null; time: string }[] }>(
@@ -53,6 +54,7 @@ export const api = {
   refreshOnu: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}/refresh`, { method: "POST" }),
   replaceOnu: (onuId: number, input: { onuSerial: string; onuType: string }) =>
     request<{ jobId: string }>(`/api/onus/${onuId}/replace`, { method: "POST", body: JSON.stringify(input) }),
+  deleteOnu: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}`, { method: "DELETE" }),
   rebootOnu: (onuId: number, deviceId: string) =>
     request<{ jobId: string }>(`/api/onus/${onuId}/reboot`, { method: "POST", body: JSON.stringify({ deviceId }) }),
   wifiInfo: (onuId: number) => request<{ devices: WifiDevice[] }>(`/api/onus/${onuId}/wifi`),

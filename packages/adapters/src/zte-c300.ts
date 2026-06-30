@@ -8,6 +8,7 @@ import {
   parseConnectionHistory,
   parseRunningConfig,
   parseSignal,
+  extractZteError,
   type UncfgOnu,
 } from "./zte-parsers.js";
 import {
@@ -18,9 +19,12 @@ import {
   buildPppoeCommands,
   buildAuthorizeAndPppoeCommands,
   buildReplaceOnuCommands,
+  buildDeleteOnuCommands,
   type AuthorizeOnuParams,
   type PppoeParams,
   type ReplaceOnuParams,
+  type DeleteOnuParams,
+  type PonPort,
 } from "@oltflow/core";
 
 export interface OltCreds {
@@ -354,6 +358,15 @@ async function runCommandSequence(session: CliSession, commands: string[]): Prom
   return output;
 }
 
+/** Returns the write result, but throws first if the device rejected any command
+ * (`%Error ...`) — so a job fails with the OLT's real message instead of a false
+ * "done" when nothing was actually applied. */
+function ensureApplied(output: string, pon: PonPort): { output: string; onuInterface: string } {
+  const err = extractZteError(output);
+  if (err) throw new Error(`OLT refuzoi komandën: ${err}`);
+  return { output, onuInterface: onuInterface(pon) };
+}
+
 export async function authorizeOnu(
   creds: OltCreds,
   params: AuthorizeOnuParams
@@ -365,7 +378,7 @@ export async function authorizeOnu(
     output += await session.sendCommand("!", 1200);
     output += await session.sendCommand("end", 1200);
     output += await session.sendCommand("write", 2000);
-    return { output, onuInterface: onuInterface(params.pon) };
+    return ensureApplied(output, params.pon);
   } finally {
     session.close();
   }
@@ -380,7 +393,7 @@ export async function setPppoe(
     const commands = buildPppoeCommands(params);
     let output = await runCommandSequence(session, commands);
     output += await session.sendCommand("write", 2000);
-    return { output, onuInterface: onuInterface(params.pon) };
+    return ensureApplied(output, params.pon);
   } finally {
     session.close();
   }
@@ -397,7 +410,24 @@ export async function replaceOnu(
     output += await session.sendCommand("!", 1200);
     output += await session.sendCommand("end", 1200);
     output += await session.sendCommand("write", 2000);
-    return { output, onuInterface: onuInterface(params.pon) };
+    return ensureApplied(output, params.pon);
+  } finally {
+    session.close();
+  }
+}
+
+export async function deleteOnu(
+  creds: OltCreds,
+  params: DeleteOnuParams
+): Promise<{ output: string; onuInterface: string }> {
+  const session = await login(creds);
+  try {
+    const commands = buildDeleteOnuCommands(params);
+    let output = await runCommandSequence(session, commands);
+    output += await session.sendCommand("!", 1200);
+    output += await session.sendCommand("end", 1200);
+    output += await session.sendCommand("write", 2000);
+    return ensureApplied(output, params.pon);
   } finally {
     session.close();
   }
@@ -414,7 +444,7 @@ export async function authorizeAndPppoe(
     output += await session.sendCommand("!", 1200);
     output += await session.sendCommand("end", 1200);
     output += await session.sendCommand("write", 2000);
-    return { output, onuInterface: onuInterface(params.pon) };
+    return ensureApplied(output, params.pon);
   } finally {
     session.close();
   }

@@ -22,7 +22,7 @@ import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOlts } from "./providers";
-import { api, pollJob, type AuditEntry } from "@/lib/api";
+import { api, type AuditEntry } from "@/lib/api";
 
 interface Stats {
   total: number;
@@ -51,48 +51,30 @@ export default function DashboardPage() {
   const [history, setHistory] = useState<{ on: number }[]>(Array(20).fill({ on: 0 }));
   const [activity, setActivity] = useState<AuditEntry[]>([]);
 
-  // Cheap, DB-only reads — safe to poll often.
+  // Cheap, DB-only reads — safe to poll often. The "waiting authorization" count comes
+  // from the persisted unconfigured set (kept current by the worker's inventory sync), so
+  // it's always accurate without a live `show gpon onu uncfg` scan from the browser.
   const refresh = useCallback(async () => {
     if (!currentOlt) return;
-    try {
-      const [statsRes, auditRes] = await Promise.all([api.stats(currentOlt.id), api.audit(currentOlt.id)]);
-      setStats(statsRes);
-      setActivity(auditRes.logs);
-      setHistory((prev) => [...prev.slice(1), { on: statsRes.online }]);
-    } catch {
-      // keep last known stats on transient errors
-    }
-  }, [currentOlt]);
-
-  // Opens a real Telnet/SSH session to the OLT (`show gpon onu uncfg`) — much
-  // more expensive than the DB-backed stats above, and contends for the
-  // per-OLT device lock with provisioning actions. Refresh far less often;
-  // the Unconfigured page's own "Skano" button covers on-demand freshness.
-  const refreshWaiting = useCallback(async () => {
-    if (!currentOlt) return;
-    try {
-      const { jobId } = await api.scanUnconfigured(currentOlt.id);
-      const job = await pollJob(jobId).catch(() => null);
-      const output = job?.output as { total?: number } | null;
-      if (output?.total !== undefined) setWaiting(output.total);
-    } catch {
-      // keep last known count on transient errors
-    }
+    // Each card is fetched independently — a failure in one (e.g. the unconfigured
+    // endpoint) must never blank the others, so we don't await them together.
+    const oltId = currentOlt.id;
+    api
+      .stats(oltId)
+      .then((statsRes) => {
+        setStats(statsRes);
+        setHistory((prev) => [...prev.slice(1), { on: statsRes.online }]);
+      })
+      .catch(() => {});
+    api.audit(oltId).then((r) => setActivity(r.logs)).catch(() => {});
+    api.unconfigured(oltId).then((r) => setWaiting(r.total)).catch(() => {});
   }, [currentOlt]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
   }, [refresh]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshWaiting();
-    const id = setInterval(refreshWaiting, 300_000);
-    return () => clearInterval(id);
-  }, [refreshWaiting]);
 
   if (oltsLoading) {
     return (
@@ -148,7 +130,7 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={history}>
                     <YAxis hide domain={[0, "auto"]} />
-                    <Line type="monotone" dataKey="on" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="on" stroke="var(--color-primary)" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -172,7 +154,7 @@ export default function DashboardPage() {
                         <Icon className="h-4 w-4" />
                       </div>
                       <div>
-                        <div className={a.result === "error" ? "text-rose-400" : "text-foreground"}>
+                        <div className={a.result === "error" ? "text-rose-600" : "text-foreground"}>
                           {meta.label} {a.ponPort ? `· ${a.ponPort.replace("gpon-onu_", "")}` : ""}
                         </div>
                         <div className="text-[10px] text-muted-foreground">{new Date(a.createdAt).toLocaleString("sq-AL")}</div>

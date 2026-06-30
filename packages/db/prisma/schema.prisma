@@ -26,9 +26,28 @@ model Olt {
   status      String    @default("unknown") // online | offline | unknown
   lastSync    DateTime?
   onus        Onu[]
+  uncfgOnus   UncfgOnu[]
   jobs        Job[]
   auditLogs   AuditLog[]
   createdAt   DateTime  @default(now())
+}
+
+/// Unconfigured (waiting-authorization) ONUs, persisted from each inventory sync so the
+/// dashboard/Unconfigured page read a stable DB row instead of a live `show gpon onu uncfg`
+/// per page-load. Reconciled every sync tick: present serials are upserted, absent ones
+/// removed — so the "waiting authorization" count is always accurate without a Scan button.
+model UncfgOnu {
+  id        Int      @id @default(autoincrement())
+  oltId     Int
+  olt       Olt      @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  ponPort   String // gpon-olt_1/15/1 (the PON it was detected on)
+  serial    String // ONU serial broadcast before authorization
+  state     String? // raw uncfg state, e.g. "unknown"
+  firstSeen DateTime @default(now())
+  lastSeen  DateTime @default(now())
+
+  @@unique([oltId, serial])
+  @@index([oltId])
 }
 
 model Onu {
@@ -52,6 +71,7 @@ model Onu {
   @@unique([oltId, ponPort])
   @@index([serial])
   @@index([state])
+  @@index([oltId, state]) // dashboard/list rollups: count + groupBy ONUs per OLT by state
 }
 
 model Signal {
@@ -68,6 +88,7 @@ model Signal {
   recordedAt  DateTime @default(now())
 
   @@index([onuId, recordedAt])
+  @@index([signalLevel, recordedAt]) // dashboard stats: recent warning/critical signals per OLT
 }
 
 model User {
