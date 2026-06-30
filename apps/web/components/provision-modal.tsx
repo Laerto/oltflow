@@ -1,8 +1,25 @@
 "use client";
 
 import { useState } from "react";
+import { Zap, Router } from "lucide-react";
 import { api, ApiError, pollJob } from "@/lib/api";
-import { Modal, Field, inputClass, Button, Alert } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ONU_TYPES, TCONT_PROFILES, DEFAULT_VLAN_ID, DEFAULT_ONU_TYPE, DEFAULT_TCONT_PROFILE } from "@oltflow/core";
 
 export function ProvisionModal({
@@ -72,65 +89,97 @@ export function ProvisionModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={<>⚡ Provizionim ONU</>}>
-      <form onSubmit={(e) => run("auth", e)}>
-        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-xs text-blue-700">
-          📡 <strong>SN:</strong> {serial} &nbsp;·&nbsp; <strong>Port:</strong> {ponPort.replace("gpon-onu_", "")}
-        </div>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-bold">
+            <Zap className="h-5 w-5 text-primary" /> Provizionim ONU
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => run("auth", e)} className="space-y-4">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300">
+            <Router className="mr-1 inline h-4 w-4" />
+            <strong>SN:</strong> {serial} &nbsp;·&nbsp; <strong>Port:</strong> {ponPort.replace("gpon-onu_", "")}
+          </div>
 
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">📋 Informacioni ONU</div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Emri Klientit *">
-            <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="KLIENTI EMRI MBIEMRI" className={inputClass} />
-          </Field>
-          <Field label="Tipi ONU">
-            <select value={onuType} onChange={(e) => setOnuType(e.target.value)} className={inputClass}>
-              {ONU_TYPES.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="TCONT Profile">
-            <select value={tcontProfile} onChange={(e) => setTcontProfile(e.target.value)} className={inputClass}>
-              {TCONT_PROFILES.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="VLAN ID">
-            <input value={vlanId} onChange={(e) => setVlanId(e.target.value)} className={inputClass} />
-          </Field>
-        </div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Informacioni ONU</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Emri Klientit *</Label>
+              <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="KLIENTI EMRI MBIEMRI" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Tipi ONU</Label>
+              <Select value={onuType} onValueChange={setOnuType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ONU_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">TCONT Profile</Label>
+              <Select value={tcontProfile} onValueChange={setTcontProfile}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TCONT_PROFILES.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">VLAN ID</Label>
+              <Input value={vlanId} onChange={(e) => setVlanId(e.target.value)} />
+            </div>
+          </div>
 
-        <div className="my-3 h-px bg-slate-200" />
+          <div className="h-px bg-border" />
 
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">🔐 Kredencialet PPPoE</div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Username ISP">
-            <input value={pppoeUser} onChange={(e) => setPppoeUser(e.target.value)} placeholder="user@isp.al" className={inputClass} />
-          </Field>
-          <Field label="Password ISP">
-            <input type="password" value={pppoePass} onChange={(e) => setPppoePass(e.target.value)} placeholder="••••••••" className={inputClass} />
-          </Field>
-        </div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Kredencialet PPPoE</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Username ISP</Label>
+              <Input value={pppoeUser} onChange={(e) => setPppoeUser(e.target.value)} placeholder="user@isp.al" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Password ISP</Label>
+              <Input type="password" value={pppoePass} onChange={(e) => setPppoePass(e.target.value)} placeholder="••••••••" />
+            </div>
+          </div>
 
-        {error && <Alert kind="err">{error}</Alert>}
-        {success && <Alert kind="ok">{success}</Alert>}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Anulo
-          </Button>
-          <Button type="submit" variant="secondary" disabled={loading !== null}>
-            {loading === "auth" ? "Duke autorizuar..." : "📡 Vetëm Autorizo"}
-          </Button>
-          <Button type="button" onClick={(e) => run("both", e)} disabled={loading !== null} className="bg-gradient-to-r from-blue-600 to-green-600 text-white hover:opacity-90">
-            {loading === "both" ? "Duke procesuar..." : "⚡ Autorizo + PPPoE"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Anulo
+            </Button>
+            <Button type="submit" variant="outline" disabled={loading !== null}>
+              {loading === "auth" ? "Duke autorizuar..." : "Vetëm Autorizo"}
+            </Button>
+            <Button type="button" onClick={(e) => run("both", e)} disabled={loading !== null} className="bg-gradient-to-r from-blue-600 to-green-600 text-white hover:opacity-90">
+              {loading === "both" ? "Duke procesuar..." : "Autorizo + PPPoE"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

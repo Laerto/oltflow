@@ -16,6 +16,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AppSidebar } from "./app-sidebar";
 import { MobileNav } from "./mobile-nav";
 import { OltSelector } from "./olt-selector";
@@ -121,7 +129,7 @@ function AddOltModal({
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={onSubmit}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
               <Server className="h-5 w-5 text-primary" /> Shto OLT të ri
             </DialogTitle>
             <DialogDescription>Plotësoni të dhënat për të shtuar një OLT të ri në sistem.</DialogDescription>
@@ -165,19 +173,22 @@ function AddOltModal({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="protocol">Protokolli</Label>
-                <select
-                  id="protocol"
+                <Select
                   value={protocol}
-                  onChange={(e) => {
-                    const p = e.target.value as "telnet" | "ssh";
+                  onValueChange={(v) => {
+                    const p = v as "telnet" | "ssh";
                     setProtocol(p);
                     setPort((cur) => (cur === "23" || cur === "22" ? (p === "ssh" ? "22" : "23") : cur));
                   }}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
-                  <option value="telnet">Telnet</option>
-                  <option value="ssh">SSH</option>
-                </select>
+                  <SelectTrigger id="protocol">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="telnet">Telnet</SelectItem>
+                    <SelectItem value="ssh">SSH</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="port">Port</Label>
@@ -224,14 +235,14 @@ function AddOltModal({
             </p>
 
             {error && (
-              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
             {success && (
-              <div className="rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
-                {success}
-              </div>
+              <Alert className="border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <AlertDescription>{success}</AlertDescription>
+              </Alert>
             )}
           </div>
 

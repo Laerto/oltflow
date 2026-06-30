@@ -1,8 +1,18 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Lock } from "lucide-react";
 import { api, ApiError, pollJob } from "@/lib/api";
-import { Modal, Field, inputClass, Button, Alert } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_VLAN_ID } from "@oltflow/core";
 
 export function PppoeModal({
@@ -58,30 +68,53 @@ export function PppoeModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={<>🔐 Ndrysho PPPoE <span className="text-xs font-normal text-slate-400">{ponPort.replace("gpon-onu_", "")}</span></>}>
-      <form onSubmit={onSubmit}>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Username ISP *">
-            <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="user@isp.al" className={inputClass} />
-          </Field>
-          <Field label="Password ISP *">
-            <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className={inputClass} />
-          </Field>
-        </div>
-        <Field label="VLAN ID">
-          <input value={vlanId} onChange={(e) => setVlanId(e.target.value)} className={inputClass} />
-        </Field>
-        {error && <Alert kind="err">{error}</Alert>}
-        {success && <Alert kind="ok">{success}</Alert>}
-        <div className="mt-4 flex justify-end gap-2 border-t border-slate-200 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Anulo
-          </Button>
-          <Button type="submit" variant="success" disabled={loading}>
-            {loading ? "Duke dërguar..." : "📤 Dërgo PPPoE"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-bold">
+            <Lock className="h-5 w-5 text-primary" /> Ndrysho PPPoE
+            <span className="ml-1 text-xs font-normal text-muted-foreground">
+              {ponPort.replace("gpon-onu_", "")}
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Username ISP *</Label>
+              <Input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="user@isp.al" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Password ISP *</Label>
+              <Input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">VLAN ID</Label>
+            <Input value={vlanId} onChange={(e) => setVlanId(e.target.value)} />
+          </div>
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Anulo
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Duke dërguar..." : "Dërgo PPPoE"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,8 +1,25 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Pencil } from "lucide-react";
 import { api, ApiError, type OltSummary } from "@/lib/api";
-import { Modal, Field, inputClass, Button, Alert } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { parseSlots } from "@/components/shell";
 
 export function EditOltModal({
@@ -61,61 +78,90 @@ export function EditOltModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`✏ Modifiko OLT — ${olt.name}`}>
-      <form onSubmit={onSubmit}>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Emri *">
-            <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="IP Adresa *">
-            <input required value={ip} onChange={(e) => setIp(e.target.value)} className={inputClass} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Username">
-            <input value={username} onChange={(e) => setUsername(e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Password (lër bosh për ta ruajtur)">
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Protokolli">
-            <select value={protocol} onChange={(e) => setProtocol(e.target.value as "telnet" | "ssh")} className={inputClass}>
-              <option value="telnet">Telnet</option>
-              <option value="ssh">SSH</option>
-            </select>
-          </Field>
-          <Field label="Port">
-            <input value={port} onChange={(e) => setPort(e.target.value)} className={inputClass} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Lokacioni">
-            <input value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Slot-et GPON (GTGH)">
-            <input value={slots} onChange={(e) => setSlots(e.target.value)} placeholder="4,15,17,19,20" className={inputClass} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Slot-et EPON (ETTO) — opsionale">
-            <input value={eponSlots} onChange={(e) => setEponSlots(e.target.value)} placeholder="9,14" className={inputClass} />
-          </Field>
-        </div>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-bold">
+            <Pencil className="h-5 w-5 text-primary" /> Modifiko OLT — {olt.name}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Emri *</Label>
+              <Input required value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">IP Adresa *</Label>
+              <Input required value={ip} onChange={(e) => setIp(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Username</Label>
+              <Input value={username} onChange={(e) => setUsername(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Password (lër bosh për ta ruajtur)</Label>
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Protokolli</Label>
+              <Select value={protocol} onValueChange={(v) => setProtocol(v as "telnet" | "ssh")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="telnet">Telnet</SelectItem>
+                  <SelectItem value="ssh">SSH</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Port</Label>
+              <Input value={port} onChange={(e) => setPort(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Lokacioni</Label>
+              <Input value={location} onChange={(e) => setLocation(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Slot-et GPON (GTGH)</Label>
+              <Input value={slots} onChange={(e) => setSlots(e.target.value)} placeholder="4,15,17,19,20" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Slot-et EPON (ETTO) — opsionale</Label>
+              <Input value={eponSlots} onChange={(e) => setEponSlots(e.target.value)} placeholder="9,14" />
+            </div>
+          </div>
 
-        {error && <Alert kind="err">{error}</Alert>}
-        {success && <Alert kind="ok">{success}</Alert>}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
 
-        <div className="mt-4 flex justify-end gap-2 border-t border-slate-200 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Anulo
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? "Duke ruajtur..." : "✔ Ruaj"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Anulo
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Duke ruajtur..." : "Ruaj"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

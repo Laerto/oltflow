@@ -1,8 +1,18 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Wifi } from "lucide-react";
 import { api, ApiError, pollJob } from "@/lib/api";
-import { Modal, Field, inputClass, Button, Alert } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function WifiModal({
   open,
@@ -66,38 +76,63 @@ export function WifiModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={<>📶 Modifiko WiFi</>}>
-      <form onSubmit={onSubmit}>
-        <Alert kind="load">Dërgohet via TR-069 — efekt pas 1-2 min</Alert>
-        <div className="mt-3 text-[10px] font-bold uppercase tracking-wide text-slate-500">📡 WiFi 2.4 GHz</div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="SSID 2.4G">
-            <input value={ssid2g} onChange={(e) => setSsid2g(e.target.value)} placeholder="NeWave-Klienti" className={inputClass} />
-          </Field>
-          <Field label="Password 2.4G">
-            <input type="password" value={pass2g} onChange={(e) => setPass2g(e.target.value)} placeholder="••••••••" className={inputClass} />
-          </Field>
-        </div>
-        <div className="mt-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">📡 WiFi 5 GHz</div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="SSID 5G">
-            <input value={ssid5g} onChange={(e) => setSsid5g(e.target.value)} placeholder="NeWave-Klienti-5G" className={inputClass} />
-          </Field>
-          <Field label="Password 5G">
-            <input type="password" value={pass5g} onChange={(e) => setPass5g(e.target.value)} placeholder="••••••••" className={inputClass} />
-          </Field>
-        </div>
-        {error && <Alert kind="err">{error}</Alert>}
-        {success && <Alert kind="ok">{success}</Alert>}
-        <div className="mt-4 flex justify-end gap-2 border-t border-slate-200 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Anulo
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? "Duke dërguar..." : "📶 Apliko"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-bold">
+            <Wifi className="h-5 w-5 text-primary" /> Modifiko WiFi
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <Alert className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300">
+            <AlertDescription>Dërgohet via TR-069 — efekt pas 1-2 min</AlertDescription>
+          </Alert>
+
+          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">WiFi 2.4 GHz</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">SSID 2.4G</Label>
+              <Input value={ssid2g} onChange={(e) => setSsid2g(e.target.value)} placeholder="NeWave-Klienti" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Password 2.4G</Label>
+              <Input type="password" value={pass2g} onChange={(e) => setPass2g(e.target.value)} placeholder="••••••••" />
+            </div>
+          </div>
+
+          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">WiFi 5 GHz</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">SSID 5G</Label>
+              <Input value={ssid5g} onChange={(e) => setSsid5g(e.target.value)} placeholder="NeWave-Klienti-5G" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Password 5G</Label>
+              <Input type="password" value={pass5g} onChange={(e) => setPass5g(e.target.value)} placeholder="••••••••" />
+            </div>
+          </div>
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Anulo
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Duke dërguar..." : "Apliko"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
