@@ -1,9 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { Router, Lock, Zap } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EmptyState } from "@/components/empty-state";
 import { useOlts } from "../providers";
 import { api, pollJob, ApiError } from "@/lib/api";
-import { Card, Field, inputClass, Button, Alert, Empty } from "@/components/ui";
 import { ONU_TYPES, TCONT_PROFILES, DEFAULT_VLAN_ID, DEFAULT_ONU_TYPE, DEFAULT_TCONT_PROFILE } from "@oltflow/core";
 
 export default function ProvisionPage() {
@@ -12,14 +19,16 @@ export default function ProvisionPage() {
   if (!currentOlt) {
     return (
       <Card>
-        <Empty icon="🔌">Zgjidh ose shto një OLT.</Empty>
+        <EmptyState>Zgjidh ose shto një OLT.</EmptyState>
       </Card>
     );
   }
 
   return (
     <div>
-      <div className="mb-4 text-xl font-bold text-slate-900">⚡ Provizionim ONU</div>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold tracking-tight text-foreground">Provizionim ONU</h1>
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <AuthorizeForm oltId={currentOlt.id} />
         <PppoeForm oltId={currentOlt.id} />
@@ -72,48 +81,69 @@ function AuthorizeForm({ oltId }: { oltId: number }) {
   }
 
   return (
-    <Card title={<>📡 Autorizim ONU</>}>
-      <div className="p-4">
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <Router className="h-4 w-4 text-primary" /> Autorizim ONU
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Serial Number *">
-            <input value={sn} onChange={(e) => setSn(e.target.value)} placeholder="ZTEGC174690E" className={inputClass} />
-          </Field>
-          <Field label="PON Port *">
-            <input value={pon} onChange={(e) => setPon(e.target.value)} placeholder="gpon-onu_1/15/1:1" className={inputClass} />
-          </Field>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Serial Number *</Label>
+            <Input value={sn} onChange={(e) => setSn(e.target.value)} placeholder="ZTEGC174690E" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">PON Port *</Label>
+            <Input value={pon} onChange={(e) => setPon(e.target.value)} placeholder="gpon-onu_1/15/1:1" />
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Emri ONU">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="KLIENTI EMRI" className={inputClass} />
-          </Field>
-          <Field label="Tipi ONU">
-            <select value={type} onChange={(e) => setType(e.target.value)} className={inputClass}>
-              {ONU_TYPES.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </Field>
+        <div className="grid grid-cols-2 gap-3 pt-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Emri ONU</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="KLIENTI EMRI" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Tipi ONU</Label>
+            <Select value={type} onValueChange={setType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ONU_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="TCONT Profile">
-            <select value={tcont} onChange={(e) => setTcont(e.target.value)} className={inputClass}>
-              {TCONT_PROFILES.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="VLAN ID">
-            <input value={vlan} onChange={(e) => setVlan(e.target.value)} className={inputClass} />
-          </Field>
+        <div className="grid grid-cols-2 gap-3 pt-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">TCONT Profile</Label>
+            <Select value={tcont} onValueChange={setTcont}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TCONT_PROFILES.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">VLAN ID</Label>
+            <Input value={vlan} onChange={(e) => setVlan(e.target.value)} />
+          </div>
         </div>
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-2">
           <Button onClick={submit} disabled={loading}>
-            {loading ? "Duke autorizuar..." : "✔ Autorizo"}
+            {loading ? "Duke autorizuar..." : "Autorizo"}
           </Button>
         </div>
-        {error && <Alert kind="err">{error}</Alert>}
-        {success && <Alert kind="ok">{success}</Alert>}
-      </div>
+        {error && <Alert variant="destructive" className="mt-3"><AlertDescription>{error}</AlertDescription></Alert>}
+        {success && <Alert className="mt-3"><AlertDescription>{success}</AlertDescription></Alert>}
+      </CardContent>
     </Card>
   );
 }
@@ -148,32 +178,41 @@ function PppoeForm({ oltId }: { oltId: number }) {
   }
 
   return (
-    <Card title={<>🔐 PPPoE via OMCI</>}>
-      <div className="p-4">
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <Lock className="h-4 w-4 text-primary" /> PPPoE via OMCI
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="PON Port *">
-            <input value={pon} onChange={(e) => setPon(e.target.value)} placeholder="gpon-onu_1/15/15:1" className={inputClass} />
-          </Field>
-          <Field label="VLAN ID">
-            <input value={vlan} onChange={(e) => setVlan(e.target.value)} className={inputClass} />
-          </Field>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">PON Port *</Label>
+            <Input value={pon} onChange={(e) => setPon(e.target.value)} placeholder="gpon-onu_1/15/15:1" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">VLAN ID</Label>
+            <Input value={vlan} onChange={(e) => setVlan(e.target.value)} />
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Username ISP *">
-            <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="user@isp.al" className={inputClass} />
-          </Field>
-          <Field label="Password ISP *">
-            <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="••••••••" className={inputClass} />
-          </Field>
+        <div className="grid grid-cols-2 gap-3 pt-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Username ISP *</Label>
+            <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="user@isp.al" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Password ISP *</Label>
+            <Input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="••••••••" />
+          </div>
         </div>
-        <div className="flex justify-end">
-          <Button variant="success" onClick={submit} disabled={loading}>
-            {loading ? "Duke dërguar..." : "📤 Dërgo PPPoE"}
+        <div className="flex justify-end pt-2">
+          <Button variant="secondary" onClick={submit} disabled={loading}>
+            {loading ? "Duke dërguar..." : "Dërgo PPPoE"}
           </Button>
         </div>
-        {error && <Alert kind="err">{error}</Alert>}
-        {success && <Alert kind="ok">{success}</Alert>}
-      </div>
+        {error && <Alert variant="destructive" className="mt-3"><AlertDescription>{error}</AlertDescription></Alert>}
+        {success && <Alert className="mt-3"><AlertDescription>{success}</AlertDescription></Alert>}
+      </CardContent>
     </Card>
   );
 }
@@ -221,42 +260,58 @@ function BothForm({ oltId }: { oltId: number }) {
   }
 
   return (
-    <Card title={<>⚡ Autorizim + PPPoE Bashkë</>}>
-      <div className="p-4">
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <Zap className="h-4 w-4 text-primary" /> Autorizim + PPPoE Bashkë
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Serial Number *">
-            <input value={sn} onChange={(e) => setSn(e.target.value)} placeholder="ZTEGC174690E" className={inputClass} />
-          </Field>
-          <Field label="PON Port *">
-            <input value={pon} onChange={(e) => setPon(e.target.value)} placeholder="gpon-onu_1/15/1:1" className={inputClass} />
-          </Field>
-          <Field label="Emri ONU">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="KLIENTI" className={inputClass} />
-          </Field>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Serial Number *</Label>
+            <Input value={sn} onChange={(e) => setSn(e.target.value)} placeholder="ZTEGC174690E" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">PON Port *</Label>
+            <Input value={pon} onChange={(e) => setPon(e.target.value)} placeholder="gpon-onu_1/15/1:1" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Emri ONU</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="KLIENTI" />
+          </div>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Tipi ONU">
-            <select value={type} onChange={(e) => setType(e.target.value)} className={inputClass}>
-              {ONU_TYPES.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Username ISP *">
-            <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="user@isp.al" className={inputClass} />
-          </Field>
-          <Field label="Password ISP *">
-            <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="••••••••" className={inputClass} />
-          </Field>
+        <div className="grid grid-cols-3 gap-3 pt-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Tipi ONU</Label>
+            <Select value={type} onValueChange={setType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ONU_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Username ISP *</Label>
+            <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="user@isp.al" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Password ISP *</Label>
+            <Input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="••••••••" />
+          </div>
         </div>
-        <div className="flex justify-end">
-          <Button onClick={submit} disabled={loading} className="bg-gradient-to-r from-blue-600 to-green-600 text-white">
-            {loading ? "Duke procesuar..." : "⚡ Autorizo + PPPoE"}
+        <div className="flex justify-end pt-2">
+          <Button onClick={submit} disabled={loading}>
+            {loading ? "Duke procesuar..." : "Autorizo + PPPoE"}
           </Button>
         </div>
-        {error && <Alert kind="err">{error}</Alert>}
-        {success && <Alert kind="ok">{success}</Alert>}
-      </div>
+        {error && <Alert variant="destructive" className="mt-3"><AlertDescription>{error}</AlertDescription></Alert>}
+        {success && <Alert className="mt-3"><AlertDescription>{success}</AlertDescription></Alert>}
+      </CardContent>
     </Card>
   );
 }
