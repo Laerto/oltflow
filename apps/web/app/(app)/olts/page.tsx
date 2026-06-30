@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil, Trash2, LayoutDashboard, Server } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { StatusBadge } from "@/components/status-badge";
+import { EmptyState } from "@/components/empty-state";
 import { useOlts } from "../providers";
 import { api, ApiError, type OltSummary } from "@/lib/api";
-import { Card, Badge, Button, Empty } from "@/components/ui";
 import { EditOltModal } from "@/components/edit-olt-modal";
 
 export default function OltsPage() {
@@ -30,61 +37,69 @@ export default function OltsPage() {
 
   return (
     <div>
-      <div className="mb-4 text-xl font-bold text-slate-900">🔌 Menaxhimi i OLT-eve</div>
-      {error && <div className="mb-3 text-xs text-red-600">⚠ {error}</div>}
+      <div className="mb-4">
+        <h1 className="text-xl font-bold tracking-tight text-foreground">Menaxhimi i OLT-eve</h1>
+      </div>
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       <Card>
         {olts.length === 0 ? (
-          <Empty icon="🔌">Asnjë OLT — kliko &ldquo;+ Shto OLT&rdquo; lart.</Empty>
+          <EmptyState>Asnjë OLT — kliko &ldquo;Shto OLT&rdquo; në menunë kryesore.</EmptyState>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] font-bold uppercase text-slate-500">
-                  <th className="px-3.5 py-2.5">#</th>
-                  <th className="px-3.5 py-2.5">Emri</th>
-                  <th className="px-3.5 py-2.5">IP</th>
-                  <th className="px-3.5 py-2.5">Lokacioni</th>
-                  <th className="px-3.5 py-2.5">Status</th>
-                  <th className="px-3.5 py-2.5">ONU</th>
-                  <th className="px-3.5 py-2.5">Last Sync</th>
-                  <th className="px-3.5 py-2.5">Veprime</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-[10px] uppercase">#</TableHead>
+                  <TableHead className="text-[10px] uppercase">Emri</TableHead>
+                  <TableHead className="text-[10px] uppercase">IP</TableHead>
+                  <TableHead className="text-[10px] uppercase">Lokacioni</TableHead>
+                  <TableHead className="text-[10px] uppercase">Status</TableHead>
+                  <TableHead className="text-[10px] uppercase">ONU</TableHead>
+                  <TableHead className="text-[10px] uppercase">Last Sync</TableHead>
+                  <TableHead className="text-[10px] uppercase">Veprime</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {olts.map((o, i) => (
-                  <tr key={o.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                    <td className="px-3.5 py-2.5">{i + 1}</td>
-                    <td className="px-3.5 py-2.5 font-semibold">{o.name}</td>
-                    <td className="px-3.5 py-2.5 font-mono text-xs text-blue-600">{o.ip}</td>
-                    <td className="px-3.5 py-2.5">{o.location || "–"}</td>
-                    <td className="px-3.5 py-2.5">
-                      <Badge color={o.status === "online" ? "green" : o.status === "offline" ? "red" : "gray"}>● {o.status}</Badge>
-                    </td>
-                    <td className="px-3.5 py-2.5">{o.total}</td>
-                    <td className="px-3.5 py-2.5 text-[11px] text-slate-500">{o.lastSync ? new Date(o.lastSync).toLocaleString("sq-AL") : "–"}</td>
-                    <td className="px-3.5 py-2.5">
+                  <TableRow key={o.id}>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell className="font-semibold">{o.name}</TableCell>
+                    <TableCell className="font-mono text-xs text-primary">{o.ip}</TableCell>
+                    <TableCell>{o.location || "–"}</TableCell>
+                    <TableCell>
+                      <StatusBadge state={o.status === "online" ? "working" : o.status === "offline" ? "offline" : null} />
+                    </TableCell>
+                    <TableCell>{o.total}</TableCell>
+                    <TableCell className="text-[11px] text-muted-foreground">{o.lastSync ? new Date(o.lastSync).toLocaleString("sq-AL") : "–"}</TableCell>
+                    <TableCell>
                       <div className="flex gap-1.5">
                         <Button
-                          className="px-2 py-1 text-[11px]"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
                           onClick={() => {
                             setCurrentOltId(o.id);
                             router.push("/");
                           }}
                         >
-                          Dashboard
+                          <LayoutDashboard className="mr-1 h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Dashboard</span>
                         </Button>
-                        <Button variant="secondary" className="px-2 py-1 text-[11px]" onClick={() => setEditTarget(o)}>
-                          ✏
+                        <Button variant="secondary" size="sm" className="h-7 w-7 p-0" onClick={() => setEditTarget(o)}>
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="danger" className="px-2 py-1 text-[11px]" disabled={busyId === o.id} onClick={() => remove(o.id, o.name)}>
-                          🗑
+                        <Button variant="destructive" size="sm" className="h-7 w-7 p-0" disabled={busyId === o.id} onClick={() => remove(o.id, o.name)}>
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </Card>
