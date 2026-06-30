@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import {
   Activity,
-  Cable,
   Plug,
   Router,
   Server,
@@ -83,12 +81,14 @@ export default function DashboardPage() {
   }, [currentOlt]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
   }, [refresh]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshWaiting();
     const id = setInterval(refreshWaiting, 300_000);
     return () => clearInterval(id);
