@@ -41,7 +41,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-64 flex-col border-r border-border bg-card lg:flex">
+      <aside className="hidden w-64 flex-col border-r border-border bg-sidebar lg:flex">
         <AppSidebar onLogout={logout} />
       </aside>
       <div className="flex flex-1 flex-col">
@@ -77,6 +77,7 @@ function AddOltModal({
   const [ip, setIp] = useState("");
   const [username, setUsername] = useState("zte");
   const [password, setPassword] = useState("");
+  const [enablePassword, setEnablePassword] = useState("");
   const [protocol, setProtocol] = useState<"telnet" | "ssh">("telnet");
   const [port, setPort] = useState("23");
   const [location, setLocation] = useState("");
@@ -97,6 +98,7 @@ function AddOltModal({
         ip,
         username,
         password,
+        enablePassword: enablePassword || undefined,
         protocol,
         port: Number(port) || (protocol === "ssh" ? 22 : 23),
         location,
@@ -115,6 +117,7 @@ function AddOltModal({
         setName("");
         setIp("");
         setPassword("");
+        setEnablePassword("");
         setSuccess(null);
       }, 1600);
     } catch (err) {
@@ -168,6 +171,14 @@ function AddOltModal({
                 <Label htmlFor="password">Password</Label>
                 <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="enablePassword">Enable / Privileged password (opsionale)</Label>
+              <Input id="enablePassword" type="password" value={enablePassword} onChange={(e) => setEnablePassword(e.target.value)} placeholder="vetëm nëse OLT kërkon 'enable' password" />
+              <p className="text-[11px] text-muted-foreground">
+                Disa OLT (p.sh. C320 me SSH) hyjnë në modalitet user (<code className="rounded bg-muted px-1">&gt;</code>) dhe kërkojnë <code className="rounded bg-muted px-1">enable</code> + këtë password. Lëre bosh nëse është njësoj me password-in e hyrjes.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

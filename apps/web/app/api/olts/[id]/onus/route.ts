@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { getWanIpsBySerial } from "@oltflow/adapters";
+import { onuConnectionKind } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
 
 const GENIEACS_URL = process.env.GENIEACS_URL ?? "";
@@ -21,6 +22,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({
     onus: onus.map((o) => {
       const signal = o.signals[0];
+      const acsIp = (o.serial && wanIps.get(o.serial.toUpperCase())) || null;
+      // RADIUS-sourced live IP (mgmtIp) + expiry are written to the DB by the worker.
+      const bridge = onuConnectionKind(o.type) === "bridge";
       return {
         id: o.id,
         ponPort: o.ponPort,
@@ -34,8 +38,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         pppoeUser: o.pppoeUser,
         lineProfile: o.lineProfile,
         serviceProfile: o.serviceProfile,
+        mac: o.mac,
+        // Bridge → Mikrotik IP for Winbox; route → shown as WAN IP below.
+        mgmtIp: bridge ? o.mgmtIp : null,
+        expiration: o.expiration ? o.expiration.toISOString() : null,
+        customer: null,
         lastSeen: o.lastSeen,
-        wanIp: (o.serial && wanIps.get(o.serial.toUpperCase())) || null,
+        // Route WAN IP: worker RADIUS live IP → GenieACS. Bridge shows Winbox (mgmtIp) instead.
+        wanIp: bridge ? acsIp : o.mgmtIp || acsIp,
         onuRx: signal?.onuRx ?? null,
         onuTx: signal?.onuTx ?? null,
         oltRx: signal?.oltRx ?? null,

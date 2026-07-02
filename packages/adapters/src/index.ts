@@ -7,3 +7,4 @@ export * from "./zte-c300.js";
 export * from "./genieacs.js";
 export * from "./snmp-session.js";
 export * from "./zte-snmp.js";
+export * from "./zte-snmp-traffic.js";

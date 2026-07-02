@@ -37,6 +37,7 @@ export function EditOltModal({
   const [ip, setIp] = useState(olt.ip);
   const [username, setUsername] = useState(olt.username);
   const [password, setPassword] = useState("");
+  const [enablePassword, setEnablePassword] = useState("");
   const [protocol, setProtocol] = useState<"telnet" | "ssh">(olt.protocol === "ssh" ? "ssh" : "telnet");
   const [port, setPort] = useState(String(olt.port));
   const [location, setLocation] = useState(olt.location ?? "");
@@ -57,6 +58,7 @@ export function EditOltModal({
         ip,
         username,
         ...(password ? { password } : {}),
+        ...(enablePassword ? { enablePassword } : {}),
         protocol,
         port: Number(port) || olt.port,
         location,
@@ -69,6 +71,7 @@ export function EditOltModal({
         onClose();
         setSuccess(null);
         setPassword("");
+        setEnablePassword("");
       }, 1500);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Gabim i papritur");
@@ -105,6 +108,10 @@ export function EditOltModal({
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Password (lër bosh për ta ruajtur)</Label>
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Enable / Privileged password (lër bosh për ta ruajtur)</Label>
+            <Input type="password" value={enablePassword} onChange={(e) => setEnablePassword(e.target.value)} placeholder="vetëm nëse OLT kërkon 'enable' password" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

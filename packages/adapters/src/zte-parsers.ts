@@ -22,6 +22,32 @@ export function extractZteError(output: string): string | null {
   return errors.length ? errors.join(" | ") : null;
 }
 
+/** Parses `show onu detail-info epon-onu_...` (EPON format differs from GPON — key: value
+ * lines with OnuType / NAME / MAC). */
+export function parseEponOnuDetail(raw: string): { type?: string; name?: string; mac?: string } {
+  const grab = (label: string): string | undefined => {
+    const m = new RegExp(`^\\s*${label}\\s*:\\s*(.+?)\\s*$`, "im").exec(raw);
+    const v = m?.[1]?.trim();
+    return v && v.length ? v : undefined;
+  };
+  return { type: grab("OnuType"), name: grab("NAME"), mac: grab("MAC") };
+}
+
+/** Parses an EPON ONU running config for the PPPoE username / VLAN. ZTE EPON carries PPPoE
+ * under the voip module: `voip pppoe username <u> password <p>` + `vlan pppoe_vlan_<id>`. */
+export function parseEponRunningConfig(raw: string): { pppoeUser?: string; vlan?: string } {
+  const u = /voip\s+pppoe\s+username\s+(\S+)/i.exec(raw);
+  const v = /pppoe_vlan_(\d+)/i.exec(raw);
+  return { pppoeUser: u?.[1], vlan: v?.[1] };
+}
+
+/** Parses the first MAC address from `show mac gpon onu <onu>` output (ZTE dotted form
+ * dc2c.6e1a.7e1b). For a bridge ONU this is the downstream device (customer Mikrotik). */
+export function parseFirstMac(raw: string): string | undefined {
+  const m = /\b([0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4})\b/.exec(raw);
+  return m ? m[1].toLowerCase() : undefined;
+}
+
 /** Parses `show gpon onu uncfg` output. */
 export function parseUncfg(raw: string): UncfgOnu[] {
   const onus: UncfgOnu[] = [];

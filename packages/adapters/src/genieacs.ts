@@ -45,8 +45,14 @@ export async function getWanIpsBySerial(genieacsUrl: string, serials: string[]):
   const wanted = serials.filter(Boolean).map((s) => s.toUpperCase());
   if (!wanted.length) return result;
 
-  // Only fetch the WAN subtree we actually read below — not every device's full param tree.
-  const res = await fetch(devicesUrl(genieacsUrl, { projection: "_id,InternetGatewayDevice.WANDevice" }));
+  // Fetch the WAN subtree AND the ManagementServer connection-request URL — the latter
+  // embeds the device's current WAN IP and is present/fresh for every ONU that informs,
+  // even when the WANConnection.ExternalIPAddress params aren't populated.
+  const res = await fetch(
+    devicesUrl(genieacsUrl, {
+      projection: "_id,InternetGatewayDevice.WANDevice,InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
+    })
+  );
   if (!res.ok) throw new Error(`GenieACS /devices dështoi: ${res.status}`);
   const devices = (await res.json()) as GenieDevice[];
 
@@ -60,20 +66,65 @@ export async function getWanIpsBySerial(genieacsUrl: string, serials: string[]):
   return result;
 }
 
+function isUsableIp(v: unknown): v is string {
+  return typeof v === "string" && /^(?:\d{1,3}\.){3}\d{1,3}$/.test(v) && v !== "0.0.0.0" && v !== "255.255.255.255";
+}
+
+/**
+ * Extracts the WAN IP from a device's TR-069 tree, trying every place a ZTE ONU can
+ * expose it, in order of preference:
+ *   1. WANPPPConnection.ExternalIPAddress  (routed PPPoE — the usual case)
+ *   2. WANIPConnection.ExternalIPAddress   (DHCP / IPoE WAN)
+ *   3. any deeper *ExternalIPAddress / *IPAddress vendor variant in the WAN subtree
+ * across all WANDevice / WANConnectionDevice / connection instance indices.
+ *
+ * This only surfaces what the ACS *has*: for an ONU behind CGNAT the device can't be
+ * reached for a connection-request, so GenieACS keeps a stale value from the last
+ * inform — the live IP must then come from RADIUS accounting.
+ */
 function extractWanIp(d: GenieDevice): string | undefined {
   const wanDevices = deepGet(d, "InternetGatewayDevice", "WANDevice") as Record<string, unknown> | undefined;
   if (!wanDevices) return undefined;
-  for (const wan of Object.values(wanDevices)) {
-    const connDevices = deepGet(wan, "WANConnectionDevice") as Record<string, unknown> | undefined;
-    if (!connDevices) continue;
-    for (const connDevice of Object.values(connDevices)) {
-      const pppConns = deepGet(connDevice, "WANPPPConnection") as Record<string, unknown> | undefined;
-      if (!pppConns) continue;
-      for (const conn of Object.values(pppConns)) {
-        const ip = deepGet(conn, "ExternalIPAddress", "_value") as string | undefined;
-        if (ip && ip !== "0.0.0.0") return ip;
+
+  for (const kind of ["WANPPPConnection", "WANIPConnection"] as const) {
+    for (const wan of Object.values(wanDevices)) {
+      const connDevices = deepGet(wan, "WANConnectionDevice") as Record<string, unknown> | undefined;
+      if (!connDevices) continue;
+      for (const connDevice of Object.values(connDevices)) {
+        const conns = deepGet(connDevice, kind) as Record<string, unknown> | undefined;
+        if (!conns) continue;
+        for (const conn of Object.values(conns)) {
+          const ip = deepGet(conn, "ExternalIPAddress", "_value");
+          if (isUsableIp(ip)) return ip;
+        }
       }
     }
+  }
+
+  // Scan the WAN subtree for any external-IP-like parameter (vendor variants),
+  // skipping gateway/dns/subnet/remote fields.
+  let found: string | undefined;
+  const walk = (obj: unknown, key = "") => {
+    if (found || !obj || typeof obj !== "object") return;
+    const rec = obj as Record<string, unknown>;
+    if ("_value" in rec) {
+      if (/IPAddress$/i.test(key) && !/dns|gateway|subnet|mask|remote|dhcp/i.test(key) && isUsableIp(rec._value)) {
+        found = rec._value as string;
+      }
+      return;
+    }
+    for (const [k, v] of Object.entries(rec)) if (!k.startsWith("_")) walk(v, k);
+  };
+  walk(wanDevices);
+  if (found) return found;
+
+  // Fallback: the device's own ConnectionRequestURL host is its current WAN IP
+  // (http://<wan-ip>:7547|58000/...). Present & fresh for any ONU that informs,
+  // so this recovers the IP for the many devices whose ExternalIPAddress is empty.
+  const cru = deepGet(d, "InternetGatewayDevice", "ManagementServer", "ConnectionRequestURL", "_value");
+  if (typeof cru === "string") {
+    const host = /^https?:\/\/([^:/]+)/i.exec(cru)?.[1];
+    if (isUsableIp(host)) return host;
   }
   return undefined;
 }

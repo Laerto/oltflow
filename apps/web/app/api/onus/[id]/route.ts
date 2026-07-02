@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { getWanIpsBySerial } from "@oltflow/adapters";
-import { JOB_NAMES, isEponPort } from "@oltflow/core";
+import { JOB_NAMES, isEponPort, onuConnectionKind } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
 import { enqueueJob } from "@/lib/queue";
 
@@ -20,6 +20,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const wanIps = onu.serial
     ? await getWanIpsBySerial(GENIEACS_URL, [onu.serial]).catch(() => new Map<string, string>())
     : new Map<string, string>();
+  const acsIp = (onu.serial && wanIps.get(onu.serial.toUpperCase())) || null;
+  const bridge = onuConnectionKind(onu.type) === "bridge";
   return NextResponse.json({
     id: onu.id,
     oltId: onu.oltId,
@@ -35,8 +37,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     pppoeUser: onu.pppoeUser,
     lineProfile: onu.lineProfile,
     serviceProfile: onu.serviceProfile,
+    mac: onu.mac,
+    mgmtIp: bridge ? onu.mgmtIp : null,
+    expiration: onu.expiration ? onu.expiration.toISOString() : null,
+    customer: null,
     lastSeen: onu.lastSeen,
-    wanIp: (onu.serial && wanIps.get(onu.serial.toUpperCase())) || null,
+    wanIp: bridge ? acsIp : onu.mgmtIp || acsIp,
     onuRx: signal?.onuRx ?? null,
     onuTx: signal?.onuTx ?? null,
     oltRx: signal?.oltRx ?? null,
@@ -45,6 +51,20 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     attenDown: signal?.attenDown ?? null,
     signalLevel: signal?.signalLevel ?? null,
   });
+}
+
+// Sets the management IP (Mikrotik behind a bridge ONU) used by the Winbox launcher.
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  await requireUser();
+  const { id } = await params;
+  const body = (await request.json().catch(() => ({}))) as { mgmtIp?: unknown };
+  const raw = typeof body.mgmtIp === "string" ? body.mgmtIp.trim() : "";
+  const ipOk = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+  if (raw && !ipOk.test(raw)) {
+    return NextResponse.json({ error: "IP jo e vlefshme" }, { status: 400 });
+  }
+  await prisma.onu.update({ where: { id: Number(id) }, data: { mgmtIp: raw || null } });
+  return NextResponse.json({ ok: true, mgmtIp: raw || null });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {

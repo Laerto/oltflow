@@ -6,7 +6,7 @@ import type { SnmpCreds } from "@oltflow/adapters";
 const OLT_CRED_KEY = process.env.OLT_CRED_KEY ?? "";
 
 export function toCreds(
-  olt: Pick<Olt, "ip" | "port" | "protocol" | "username" | "passwordEnc">
+  olt: Pick<Olt, "ip" | "port" | "protocol" | "username" | "passwordEnc" | "enablePasswordEnc">
 ): OltCreds {
   return {
     host: olt.ip,
@@ -14,6 +14,7 @@ export function toCreds(
     protocol: olt.protocol === "ssh" ? "ssh" : "telnet",
     username: olt.username,
     password: decryptSecret(olt.passwordEnc, OLT_CRED_KEY),
+    enablePassword: olt.enablePasswordEnc ? decryptSecret(olt.enablePasswordEnc, OLT_CRED_KEY) : undefined,
   };
 }
 

@@ -15,6 +15,7 @@ model Olt {
   protocol    String    @default("telnet") // telnet | ssh
   username    String
   passwordEnc String // AES-256-GCM encrypted, see @oltflow/core crypto
+  enablePasswordEnc String? // AES-256-GCM encrypted privileged/enable password (null = use login password)
   location    String?
   vendor      String    @default("zte")
   model       String? // C300 | C320
@@ -29,6 +30,7 @@ model Olt {
   uncfgOnus   UncfgOnu[]
   jobs        Job[]
   auditLogs   AuditLog[]
+  ponTraffic  PonTraffic[]
   createdAt   DateTime  @default(now())
 }
 
@@ -65,6 +67,9 @@ model Onu {
   pppoeUser      String?
   lineProfile    String?
   serviceProfile String?
+  mac            String? // MAC learned on the bridge port (the downstream Mikrotik) — RADIUS join key
+  mgmtIp         String? // live device IP (route ONU / bridge Mikrotik), filled from RADIUS by the worker
+  expiration     DateTime? // client account expiry from RADIUS Manager (rm_users), filled by the worker
   lastSeen       DateTime?
   signals        Signal[]
 
@@ -89,6 +94,23 @@ model Signal {
 
   @@index([onuId, recordedAt])
   @@index([signalLevel, recordedAt]) // dashboard stats: recent warning/critical signals per OLT
+}
+
+/// Per-PON-port throughput samples derived from SNMP 32-bit ifInOctets/ifOutOctets
+/// (this ZTE firmware leaves the 64-bit HC counters empty). One row per port per poll;
+/// the worker computes bps from the octet delta between polls and prunes rows >24h.
+/// downBps = traffic to subscribers (PON ifOutOctets), upBps = from subscribers (ifInOctets).
+model PonTraffic {
+  id         BigInt   @id @default(autoincrement())
+  oltId      Int
+  olt        Olt      @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  ponPort    String // ifName, e.g. gpon_1/15/6
+  downBps    Float
+  upBps      Float
+  recordedAt DateTime @default(now())
+
+  @@index([oltId, recordedAt])
+  @@index([oltId, ponPort, recordedAt])
 }
 
 model User {

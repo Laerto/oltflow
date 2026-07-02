@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, LayoutDashboard } from "lucide-react";
+import { Pencil, Trash2, LayoutDashboard, SatelliteDish } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,15 +10,34 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
 import { useOlts } from "../providers";
-import { api, ApiError, type OltSummary } from "@/lib/api";
+import { api, ApiError, pollJob, type OltSummary } from "@/lib/api";
 import { EditOltModal } from "@/components/edit-olt-modal";
 
 export default function OltsPage() {
   const { olts, refresh, setCurrentOltId } = useOlts();
   const router = useRouter();
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [acsBusyId, setAcsBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<OltSummary | null>(null);
+
+  async function pushAcs(id: number, name: string) {
+    if (!confirm(`Injekto ACS URL-në e TR-069 në të gjitha ONU-t e OLT "${name}"? Kjo mund të zgjasë disa minuta.`)) return;
+    setAcsBusyId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const { jobId } = await api.pushAcs(id);
+      const job = await pollJob(jobId, { timeoutMs: 600_000 });
+      if (job.status === "failed") throw new Error(job.error ?? "Dështoi");
+      setNotice((job.output as { message?: string })?.message ?? "ACS URL u injektua.");
+    } catch (err) {
+      setError(err instanceof ApiError || err instanceof Error ? err.message : "Gabim i papritur");
+    } finally {
+      setAcsBusyId(null);
+    }
+  }
 
   async function remove(id: number, name: string) {
     if (!confirm(`Fshi OLT "${name}"? Kjo do fshijë gjithë ONU-të dhe historikun e sinjalit të lidhura.`)) return;
@@ -42,6 +61,11 @@ export default function OltsPage() {
       {error && (
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {notice && (
+        <Alert className="mb-4 border-emerald-500/50 bg-emerald-500/10 text-emerald-700">
+          <AlertDescription>{notice}</AlertDescription>
         </Alert>
       )}
       <Card>
@@ -86,6 +110,17 @@ export default function OltsPage() {
                         >
                           <LayoutDashboard className="mr-1 h-3.5 w-3.5" />
                           <span className="hidden sm:inline">Dashboard</span>
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          disabled={acsBusyId === o.id}
+                          title="Injekto ACS URL-në e TR-069 në të gjitha ONU-t"
+                          onClick={() => pushAcs(o.id, o.name)}
+                        >
+                          <SatelliteDish className={`h-3.5 w-3.5 ${acsBusyId === o.id ? "animate-pulse" : ""}`} />
+                          <span className="ml-1 hidden sm:inline">{acsBusyId === o.id ? "Duke injektuar..." : "ACS"}</span>
                         </Button>
                         <Button variant="secondary" size="sm" className="h-7 w-7 p-0" onClick={() => setEditTarget(o)}>
                           <Pencil className="h-3.5 w-3.5" />

@@ -10,7 +10,10 @@ export const JOB_NAMES = {
   wifi: "wifi",
   replaceOnu: "replace-onu",
   deleteOnu: "delete-onu",
+  enableWanAccess: "enable-wan-access",
+  pushAcs: "push-acs",
   rebootOnu: "reboot-onu",
+  rebootOnuCli: "reboot-onu-cli",
   syncInventory: "sync-inventory",
   syncDetail: "sync-detail",
   syncSignals: "sync-signals",
@@ -71,9 +74,23 @@ export interface DeleteOnuPayload {
   onuId: number;
   ponPort: string;
 }
+export interface EnableWanAccessPayload {
+  oltId: number;
+  onuId: number;
+  ponPort: string;
+}
+export interface PushAcsPayload {
+  oltId: number;
+  acsUrl: string;
+}
 export interface RebootOnuPayload {
   onuId: number;
   deviceId: string;
+}
+export interface RebootOnuCliPayload {
+  oltId: number;
+  onuId: number;
+  ponPort: string;
 }
 export interface SyncInventoryPayload {
   oltId: number;

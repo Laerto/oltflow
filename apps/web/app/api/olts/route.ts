@@ -63,6 +63,7 @@ export async function POST(request: Request) {
       protocol: input.protocol,
       username: input.username,
       passwordEnc: encryptSecret(input.password, OLT_CRED_KEY),
+      enablePasswordEnc: input.enablePassword ? encryptSecret(input.enablePassword, OLT_CRED_KEY) : null,
       location: input.location,
       model: input.model,
       slots: input.slots,

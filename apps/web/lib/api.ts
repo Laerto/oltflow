@@ -39,14 +39,27 @@ export const api = {
   updateOlt: (id: number, input: Record<string, unknown>) =>
     request<{ ok: boolean }>(`/api/olts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   deleteOlt: (id: number) => request<{ ok: boolean }>(`/api/olts/${id}`, { method: "DELETE" }),
+  oltPorts: (oltId: number) => request<{ name: string; cards: OltCard[] }>(`/api/olts/${oltId}/ports`),
   stats: (oltId: number) =>
-    request<{ total: number; online: number; offline: number; criticalSignal: number; warningSignal: number }>(
-      `/api/olts/${oltId}/stats`
-    ),
+    request<{
+      total: number;
+      online: number;
+      offline: number;
+      criticalSignal: number;
+      warningSignal: number;
+      expiring: { id: number; name: string | null; ponPort: string; expiration: string | null; pppoeUser: string | null }[];
+    }>(`/api/olts/${oltId}/stats`),
   onus: (oltId: number) => request<{ onus: OnuRow[]; total: number }>(`/api/olts/${oltId}/onus`),
+  ponTraffic: (oltId: number) =>
+    request<{
+      available: boolean;
+      ports: { ponPort: string; downBps: number; upBps: number }[];
+      series: { t: number; downBps: number; upBps: number }[];
+    }>(`/api/olts/${oltId}/pon-traffic`),
   onu: (onuId: number) => request<OnuRow & { oltId: number; oltName: string }>(`/api/onus/${onuId}`),
   unconfigured: (oltId: number) => request<{ onus: UncfgOnu[]; total: number }>(`/api/olts/${oltId}/unconfigured`),
   scanUnconfigured: (oltId: number) => request<{ jobId: string }>(`/api/olts/${oltId}/scan-unconfigured`, { method: "POST" }),
+  pushAcs: (oltId: number) => request<{ jobId: string; acsUrl: string }>(`/api/olts/${oltId}/push-acs`, { method: "POST" }),
   signalHistory: (onuId: number) =>
     request<{ history: { onuRx: number | null; oltRx: number | null; signalLevel: string | null; time: string }[] }>(
       `/api/onus/${onuId}/signal-history`
@@ -55,6 +68,10 @@ export const api = {
   replaceOnu: (onuId: number, input: { onuSerial: string; onuType: string }) =>
     request<{ jobId: string }>(`/api/onus/${onuId}/replace`, { method: "POST", body: JSON.stringify(input) }),
   deleteOnu: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}`, { method: "DELETE" }),
+  setOnuMgmtIp: (onuId: number, mgmtIp: string) =>
+    request<{ ok: boolean; mgmtIp: string | null }>(`/api/onus/${onuId}`, { method: "PATCH", body: JSON.stringify({ mgmtIp }) }),
+  enableWanAccess: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}/wan-access`, { method: "POST" }),
+  restartOnu: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}/restart`, { method: "POST" }),
   rebootOnu: (onuId: number, deviceId: string) =>
     request<{ jobId: string }>(`/api/onus/${onuId}/reboot`, { method: "POST", body: JSON.stringify({ deviceId }) }),
   wifiInfo: (onuId: number) => request<{ devices: WifiDevice[] }>(`/api/onus/${onuId}/wifi`),
@@ -70,7 +87,21 @@ export const api = {
     request<{ id: string; type: string; status: string; error: string | null; output: unknown }>(`/api/jobs/${id}`),
   audit: (oltId?: number) => request<{ logs: AuditEntry[] }>(`/api/audit${oltId ? `?oltId=${oltId}` : ""}`),
   logout: () => request<{ ok: boolean }>("/api/logout", { method: "POST" }),
+  ping: (ip: string) =>
+    request<{ alive: boolean; avgMs: number | null; loss: number }>(`/api/ping?ip=${encodeURIComponent(ip)}`),
 };
+
+export interface OltPort {
+  port: number;
+  total: number;
+  online: number;
+}
+export interface OltCard {
+  slot: number;
+  kind: "gpon" | "epon";
+  card: string;
+  ports: OltPort[];
+}
 
 export interface OnuRow {
   id: number;
@@ -85,6 +116,10 @@ export interface OnuRow {
   pppoeUser: string | null;
   lineProfile: string | null;
   serviceProfile: string | null;
+  mac: string | null;
+  mgmtIp: string | null;
+  expiration: string | null;
+  customer: string | null;
   lastSeen: string | null;
   wanIp: string | null;
   onuRx: number | null;

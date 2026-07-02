@@ -29,13 +29,13 @@ export const DEFAULT_PORTS_PER_SLOT = 16; // ports 1..16 (GPON boards, confirmed
  * since EPON and GPON line cards live in different slots on a mixed-technology OLT. */
 export const DEFAULT_EPON_PORTS_PER_SLOT = 8;
 
-/** F612/F601 ONU models are deployed in bridge mode, F673 models in router/PPPoE
- * mode — this distinguishes business (route, router does the PPPoE auth) vs
- * residential (bridge, PPPoE auth happens upstream e.g. on a RADIUS/BRAS) clients
- * at a glance from the model alone, per office convention. */
+/** Office convention: the F612 / F601 / F401 models are deployed in bridge mode
+ * (PPPoE auth happens upstream on the customer's own router / BRAS); every other
+ * ZTE model is deployed routed (the ONU itself does the PPPoE). Distinguishes the
+ * two at a glance from the model alone. A leading "ZTE-" prefix is ignored. */
 export function onuConnectionKind(type: string | null | undefined): "bridge" | "route" | null {
   if (!type) return null;
-  if (type.startsWith("F612") || type.startsWith("F601")) return "bridge";
-  if (type.startsWith("F673")) return "route";
-  return null;
+  const model = type.trim().toUpperCase().replace(/^ZTE-/, "");
+  if (model.startsWith("F612") || model.startsWith("F601") || model.startsWith("F401")) return "bridge";
+  return "route";
 }

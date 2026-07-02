@@ -28,6 +28,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(input.protocol !== undefined && { protocol: input.protocol }),
       ...(input.username !== undefined && { username: input.username }),
       ...(input.password !== undefined && { passwordEnc: encryptSecret(input.password, OLT_CRED_KEY) }),
+      ...(input.enablePassword !== undefined && {
+        enablePasswordEnc: input.enablePassword ? encryptSecret(input.enablePassword, OLT_CRED_KEY) : null,
+      }),
       ...(input.location !== undefined && { location: input.location }),
       ...(input.model !== undefined && { model: input.model }),
       ...(input.slots !== undefined && { slots: input.slots }),

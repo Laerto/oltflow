@@ -167,7 +167,7 @@ export function ProvisionModal({
             </Alert>
           )}
 
-          <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
+          <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:flex-wrap sm:justify-end">
             <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
               Anulo
             </Button>

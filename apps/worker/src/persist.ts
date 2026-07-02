@@ -11,6 +11,7 @@ export interface OnuUpsertFields {
   pppoeUser?: string | null;
   lineProfile?: string | null;
   serviceProfile?: string | null;
+  mac?: string | null;
 }
 
 export async function upsertOnu(oltId: number, ponPort: string, fields: OnuUpsertFields): Promise<Onu> {

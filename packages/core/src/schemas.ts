@@ -12,6 +12,7 @@ export const createOltSchema = z.object({
   protocol: z.enum(["telnet", "ssh"]).default("telnet"),
   username: z.string().min(1),
   password: z.string().min(1),
+  enablePassword: z.string().optional(),
   location: z.string().optional().default(""),
   model: z.string().optional(),
   slots: z.array(z.number().int().positive()).optional(),
@@ -25,6 +26,7 @@ export const updateOltSchema = z.object({
   protocol: z.enum(["telnet", "ssh"]).optional(),
   username: z.string().min(1).optional(),
   password: z.string().min(1).optional(), // omit to keep the existing encrypted password
+  enablePassword: z.string().optional(), // omit to keep existing; empty string clears it
   location: z.string().optional(),
   model: z.string().optional(),
   slots: z.array(z.number().int().positive()).optional(),

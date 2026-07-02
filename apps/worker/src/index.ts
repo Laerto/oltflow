@@ -16,7 +16,10 @@ import { handleWifi } from "./handlers/wifi.js";
 import { handleSnmpDiscover } from "./handlers/snmpDiscover.js";
 import { handleReplaceOnu } from "./handlers/replaceOnu.js";
 import { handleDeleteOnu } from "./handlers/deleteOnu.js";
+import { handleEnableWanAccess } from "./handlers/enableWanAccess.js";
+import { handlePushAcs } from "./handlers/pushAcs.js";
 import { handleRebootOnu } from "./handlers/rebootOnu.js";
+import { handleRebootOnuCli } from "./handlers/rebootOnuCli.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Handler = (payload: any) => Promise<unknown>;
@@ -32,7 +35,10 @@ const HANDLERS: Record<string, Handler> = {
   [JOB_NAMES.snmpDiscover]: handleSnmpDiscover,
   [JOB_NAMES.replaceOnu]: handleReplaceOnu,
   [JOB_NAMES.deleteOnu]: handleDeleteOnu,
+  [JOB_NAMES.enableWanAccess]: handleEnableWanAccess,
+  [JOB_NAMES.pushAcs]: handlePushAcs,
   [JOB_NAMES.rebootOnu]: handleRebootOnu,
+  [JOB_NAMES.rebootOnuCli]: handleRebootOnuCli,
 };
 
 // Untracked: driven by the scheduler, no Job row / AuditLog (would flood both).

@@ -67,18 +67,6 @@ export function buildAuthorizeOnuCommands(p: AuthorizeOnuParams): string[] {
   ];
 }
 
-export function buildPppoeCommands(p: PppoeParams): string[] {
-  const onu = onuInterface(p.pon);
-  return [
-    "enable",
-    "configure terminal",
-    `pon-onu-mng ${onu}`,
-    `pppoe 1 nat enable user ${p.pppoeUsername} password ${p.pppoePassword}`,
-    "!",
-    "end",
-  ];
-}
-
 export function buildAuthorizeAndPppoeCommands(
   p: AuthorizeOnuParams & PppoeParams
 ): string[] {
@@ -126,6 +114,18 @@ export function buildDeleteOnuCommands(p: DeleteOnuParams): string[] {
     `interface ${olt}`,
     `no onu ${p.pon.onuId}`,
     "exit",
+  ];
+}
+
+/**
+ * security-mgmt rules that open the ONU's own web UI to the WAN side. Many ZTE ONUs
+ * ship with WAN management closed, so the WAN-IP link can't be opened; this (re)enables
+ * WAN web access — rule 1 = https, rule 2 = http. Runs inside the ONU's pon-onu-mng context.
+ */
+export function buildEnableWanAccessCommands(): string[] {
+  return [
+    "security-mgmt 1 state enable mode forward ingress-type wan protocol web https",
+    "security-mgmt 2 state enable mode forward ingress-type wan protocol web http",
   ];
 }
 

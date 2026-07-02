@@ -8,6 +8,9 @@ import {
   parseConnectionHistory,
   parseRunningConfig,
   parseSignal,
+  parseFirstMac,
+  parseEponOnuDetail,
+  parseEponRunningConfig,
   extractZteError,
   type UncfgOnu,
 } from "./zte-parsers.js";
@@ -16,10 +19,10 @@ import {
   onuInterface,
   oltInterface,
   buildAuthorizeOnuCommands,
-  buildPppoeCommands,
   buildAuthorizeAndPppoeCommands,
   buildReplaceOnuCommands,
   buildDeleteOnuCommands,
+  buildEnableWanAccessCommands,
   type AuthorizeOnuParams,
   type PppoeParams,
   type ReplaceOnuParams,
@@ -33,6 +36,11 @@ export interface OltCreds {
   protocol: "telnet" | "ssh";
   username: string;
   password: string;
+  /** Privileged ("enable") password. Some ZTE OLTs (notably C320 over SSH) drop
+   * the user into user-exec mode (>) where every command is rejected, and require
+   * `enable` + this password to reach privileged mode (#). Falls back to `password`
+   * when unset (OLTs whose enable password equals the login password). */
+  enablePassword?: string;
 }
 
 export interface AdapterOnuRow {
@@ -54,9 +62,23 @@ async function login(creds: OltCreds): Promise<CliSession> {
       await session.readUntil("Password:");
       session.write(creds.password);
     }
-    const out = await session.readUntil("#");
+    // Wait for the CLI prompt. ZTE drops some users straight into privileged mode
+    // (#); others (notably C320 over SSH) land in user-exec mode (>) where commands
+    // are rejected and `enable` + an enable password is needed to reach #.
+    let out = await session.readUntil("#", 5000);
+    if (!out.includes("#") && out.includes(">")) {
+      session.write("enable");
+      const prompt = await session.readUntil("Password:", 4000);
+      out += prompt;
+      if (prompt.includes("Password:")) {
+        session.write(creds.enablePassword || creds.password);
+        out += await session.readUntil("#", 5000);
+      } else if (!prompt.includes("#")) {
+        out += await session.readUntil("#", 3000);
+      }
+    }
     if (!out.includes("#")) {
-      throw new Error("Hyrja (login) dështoi — kontrollo kredencialet");
+      throw new Error("Hyrja (login) dështoi — kontrollo kredencialet ose enable password");
     }
     return session;
   } catch (err) {
@@ -138,6 +160,7 @@ export interface InventoryRow {
   serviceProfile?: string;
   pppoeUser?: string;
   vlan?: string;
+  mac?: string;
 }
 
 /**
@@ -248,6 +271,11 @@ export async function scanOltInventory(
         const runParsed = parseRunningConfig(run);
         row.pppoeUser = runParsed.pppoeUser;
         row.vlan = runParsed.vlan;
+
+        // Learned MAC on the ONU port — for bridge ONUs this is the downstream Mikrotik,
+        // the join key to RADIUS (Calling-Station-Id) for its live WAN IP.
+        const macOut = await session.sendCommand(`show mac gpon onu ${row.ponPort}`, 600);
+        row.mac = parseFirstMac(macOut);
       } catch {
         // Skip this ONU's detail on error, matching sync_service.py's per-ONU try/except.
       }
@@ -310,6 +338,52 @@ export interface OnuDetailResult {
   pppoePass?: string;
   vlan?: string;
   history: { authTime: string; offlineTime: string; cause: string }[];
+}
+
+/** Full EPON inventory: state per port, then per-ONU detail-info (name/type/MAC) and
+ * running config (voip PPPoE username/VLAN). EPON uses a different CLI shape than GPON. */
+export async function scanEponInventory(
+  creds: OltCreds,
+  slots: number[],
+  portsPerSlot: number,
+  frame = 1
+): Promise<InventoryRow[]> {
+  const session = await login(creds);
+  try {
+    await session.sendCommand("terminal length 0", 500);
+    const rows: InventoryRow[] = [];
+    for (const slot of slots) {
+      for (let port = 1; port <= portsPerSlot; port++) {
+        const out = await session.sendCommand(`show epon onu state epon-olt_${frame}/${slot}/${port}`, 500);
+        for (const r of parseEponOnuState(out)) {
+          rows.push({
+            ponPort: r.ponPort,
+            state: r.onlineStatus === "Online" ? "working" : r.onlineStatus,
+            serial: r.mac, // EPON has no SN; MAC is the identity
+          });
+        }
+      }
+    }
+    for (const row of rows) {
+      try {
+        const det = await session.sendCommand(`show onu detail-info ${row.ponPort}`, 800);
+        const d = parseEponOnuDetail(det);
+        row.name = d.name;
+        row.type = d.type;
+        if (d.mac) row.mac = d.mac;
+
+        const run = await session.sendCommand(`show onu running config ${row.ponPort}`, 800);
+        const rc = parseEponRunningConfig(run);
+        row.pppoeUser = rc.pppoeUser;
+        row.vlan = rc.vlan;
+      } catch {
+        // per-ONU best-effort, matching the GPON path
+      }
+    }
+    return rows;
+  } finally {
+    session.close();
+  }
 }
 
 export async function getOnuDetail(creds: OltCreds, ponPort: string): Promise<OnuDetailResult> {
@@ -390,9 +464,31 @@ export async function setPppoe(
 ): Promise<{ output: string; onuInterface: string }> {
   const session = await login(creds);
   try {
-    const commands = buildPppoeCommands(params);
-    let output = await runCommandSequence(session, commands);
-    output += await session.sendCommand("write", 2000);
+    // Strict PPPoE injection: login() already put us in privileged mode, so we enter
+    // config, then `pon-onu-mng <onu>` and WAIT until the prompt actually shows the
+    // `gpon-onu-mng .../...:N` context before sending the pppoe line. This guarantees
+    // the pppoe command can never land in (config)# ("%Error Ambiguous command") due to
+    // the OLT being a beat slow — the failure mode we kept hitting with fixed delays.
+    const onu = onuInterface(params.pon);
+    let output = await session.sendCommand("configure terminal", 900);
+    session.write(`pon-onu-mng ${onu}`);
+    const ctx = await session.readUntil("gpon-onu-mng", 6000);
+    output += ctx;
+    if (!ctx.includes("gpon-onu-mng")) {
+      const err = extractZteError(ctx);
+      throw new Error(
+        err
+          ? `OLT refuzoi komandën: ${err}`
+          : `Nuk u hy në kontekstin pon-onu-mng për ${onu} — a është ONU e autorizuar?`
+      );
+    }
+    output += await session.sendCommand(
+      `pppoe 1 nat enable user ${params.pppoeUsername} password ${params.pppoePassword}`,
+      1200
+    );
+    output += await session.sendCommand("!", 800);
+    output += await session.sendCommand("end", 800);
+    output += await session.sendCommand("write", 2500);
     return ensureApplied(output, params.pon);
   } finally {
     session.close();
@@ -428,6 +524,104 @@ export async function deleteOnu(
     output += await session.sendCommand("end", 1200);
     output += await session.sendCommand("write", 2000);
     return ensureApplied(output, params.pon);
+  } finally {
+    session.close();
+  }
+}
+
+export async function enableWanAccess(
+  creds: OltCreds,
+  params: { pon: PonPort }
+): Promise<{ output: string; onuInterface: string }> {
+  const session = await login(creds);
+  try {
+    // Same strict, context-verified injection as setPppoe: confirm we're inside the ONU's
+    // pon-onu-mng context before applying the security-mgmt WAN rules.
+    const onu = onuInterface(params.pon);
+    let output = await session.sendCommand("configure terminal", 900);
+    session.write(`pon-onu-mng ${onu}`);
+    const ctx = await session.readUntil("gpon-onu-mng", 6000);
+    output += ctx;
+    if (!ctx.includes("gpon-onu-mng")) {
+      const err = extractZteError(ctx);
+      throw new Error(
+        err
+          ? `OLT refuzoi komandën: ${err}`
+          : `Nuk u hy në kontekstin pon-onu-mng për ${onu} — a është ONU e autorizuar?`
+      );
+    }
+    for (const cmd of buildEnableWanAccessCommands()) {
+      output += await session.sendCommand(cmd, 1000);
+    }
+    output += await session.sendCommand("!", 800);
+    output += await session.sendCommand("end", 800);
+    output += await session.sendCommand("write", 2500);
+    return ensureApplied(output, params.pon);
+  } finally {
+    session.close();
+  }
+}
+
+/**
+ * Pushes the TR-069 ACS URL into many ONUs in a SINGLE login session (unlock + acs URL
+ * inside each ONU's pon-onu-mng context), then one `write`. Used to bulk-fix ONUs that
+ * were provisioned with an unreachable ACS URL so they start informing GenieACS.
+ */
+export async function pushAcsUrl(
+  creds: OltCreds,
+  ponPorts: string[],
+  acsUrl: string
+): Promise<{ updated: number; failed: string[]; output: string }> {
+  const session = await login(creds);
+  let updated = 0;
+  const failed: string[] = [];
+  let output = "";
+  try {
+    for (const ponPort of ponPorts) {
+      const onu = onuInterface(parsePonPort(ponPort));
+      output += await session.sendCommand("configure terminal", 500);
+      session.write(`pon-onu-mng ${onu}`);
+      const ctx = await session.readUntil("gpon-onu-mng", 5000);
+      output += ctx;
+      if (!ctx.includes("gpon-onu-mng")) {
+        failed.push(ponPort);
+        output += await session.sendCommand("end", 400);
+        continue;
+      }
+      output += await session.sendCommand("tr069-mgmt 1 state unlock", 600);
+      output += await session.sendCommand(`tr069-mgmt 1 acs ${acsUrl}`, 600);
+      output += await session.sendCommand("end", 400);
+      updated += 1;
+    }
+    output += await session.sendCommand("write", 3000);
+    return { updated, failed, output };
+  } finally {
+    session.close();
+  }
+}
+
+/** Reboots an ONU from the OLT CLI (works for GPON & EPON, TR-069 not required):
+ * `pon-onu-mng <onu>` → `reboot` → answer the `Confirm to reboot? [yes/no]:` prompt. */
+export async function rebootOnuCli(creds: OltCreds, ponPort: string): Promise<{ output: string }> {
+  const session = await login(creds);
+  try {
+    let output = await session.sendCommand("configure terminal", 800);
+    session.write(`pon-onu-mng ${ponPort}`);
+    const ctx = await session.readUntil("onu-mng", 6000);
+    output += ctx;
+    if (!ctx.includes("onu-mng")) {
+      throw new Error(`Nuk u hy në kontekstin pon-onu-mng për ${ponPort}`);
+    }
+    session.write("reboot");
+    const confirm = await session.readUntil("Confirm", 5000);
+    output += confirm;
+    if (confirm.includes("Confirm")) {
+      output += await session.sendCommand("yes", 2500);
+    }
+    output += await session.sendCommand("end", 600);
+    const err = extractZteError(output);
+    if (err) throw new Error(`OLT refuzoi komandën: ${err}`);
+    return { output };
   } finally {
     session.close();
   }

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Onu" ADD COLUMN "mac" TEXT;
+ALTER TABLE "Onu" ADD COLUMN "mgmtIp" TEXT;

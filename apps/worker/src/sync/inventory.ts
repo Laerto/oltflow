@@ -1,5 +1,5 @@
 import { prisma } from "@oltflow/db";
-import { scanOltState, scanOltEponState, scanOltInventory, scanUnconfigured } from "@oltflow/adapters";
+import { scanOltState, scanOltEponState, scanOltInventory, scanEponInventory, scanUnconfigured } from "@oltflow/adapters";
 import { DEFAULT_PORTS_PER_SLOT, DEFAULT_EPON_PORTS_PER_SLOT } from "@oltflow/core";
 import { loadOlt, toCreds } from "../olt-creds.js";
 import { batchUpsertOnus, reconcileUnconfigured } from "../persist.js";
@@ -50,7 +50,15 @@ export async function syncOltDetail(oltId: number): Promise<number> {
   const olt = await loadOlt(oltId);
   let rows;
   try {
-    rows = await withOltLock(olt.id, () => scanOltInventory(toCreds(olt), olt.slots, DEFAULT_PORTS_PER_SLOT));
+    rows = await withOltLock(olt.id, async () => {
+      const creds = toCreds(olt);
+      const gpon = await scanOltInventory(creds, olt.slots, DEFAULT_PORTS_PER_SLOT);
+      // EPON ONUs also get full detail now (name/type/MAC + voip PPPoE username).
+      const epon = olt.eponSlots.length
+        ? await scanEponInventory(creds, olt.eponSlots, DEFAULT_EPON_PORTS_PER_SLOT)
+        : [];
+      return [...gpon, ...epon];
+    });
   } catch (err) {
     if (err instanceof OltBusyError) return 0; // skip this tick, another job owns the OLT session right now
     throw err;
@@ -71,6 +79,7 @@ export async function syncOltDetail(oltId: number): Promise<number> {
         pppoeUser: row.pppoeUser,
         lineProfile: row.lineProfile,
         serviceProfile: row.serviceProfile,
+        mac: row.mac,
       },
     }))
   );

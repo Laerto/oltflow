@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ClipboardList,
+  Globe,
   Loader2,
   Lock,
   Pencil,
@@ -25,6 +26,7 @@ import { Alert } from "@/components/ui/alert";
 import { PppoeModal } from "@/components/pppoe-modal";
 import { WifiModal } from "@/components/wifi-modal";
 import { ReplaceOnuModal } from "@/components/replace-onu-modal";
+import { PingButton } from "@/components/ping-button";
 import { isEponPort, onuConnectionKind } from "@oltflow/core";
 
 type OnuDetail = OnuRow & { oltId: number; oltName: string };
@@ -48,6 +50,7 @@ export default function OnuDetailPage() {
   const [wifiOpen, setWifiOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [rebooting, setRebooting] = useState(false);
+  const [wanBusy, setWanBusy] = useState(false);
   const [rebootMsg, setRebootMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   async function load() {
@@ -67,6 +70,9 @@ export default function OnuDetailPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
+    // Auto-pull fresh signal + outage history (Historia e Lidhjes) from the OLT on open,
+    // so the office sees the connection/LOS log without an extra click.
+    void doRefresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onuId]);
 
@@ -99,6 +105,21 @@ export default function OnuDetailPage() {
       setRebootMsg({ kind: "err", text: err instanceof ApiError || err instanceof Error ? err.message : "Gabim i papritur" });
     } finally {
       setRebooting(false);
+    }
+  }
+
+  async function doWanAccess() {
+    setWanBusy(true);
+    setRebootMsg(null);
+    try {
+      const { jobId } = await api.enableWanAccess(onuId);
+      const job = await pollJob(jobId);
+      if (job.status === "failed") throw new Error(job.error ?? "Dështoi");
+      setRebootMsg({ kind: "ok", text: (job.output as { message?: string })?.message ?? "Aksesi WAN u aktivizua" });
+    } catch (err) {
+      setRebootMsg({ kind: "err", text: err instanceof ApiError || err instanceof Error ? err.message : "Gabim i papritur" });
+    } finally {
+      setWanBusy(false);
     }
   }
 
@@ -143,6 +164,9 @@ export default function OnuDetailPage() {
           </Button>
           <Button variant="secondary" onClick={() => setReplaceOpen(true)} disabled={epon} title={epon ? "Zëvendësimi nuk është i mbështetur për EPON ende" : undefined}>
             <RefreshCw className="h-4 w-4" /> Zëvendëso ONU
+          </Button>
+          <Button variant="secondary" onClick={doWanAccess} disabled={wanBusy || epon} title={epon ? "Nuk mbështetet për EPON" : "Hap aksesin WAN te paneli i ONU-së"}>
+            {wanBusy ? <Spinner /> : <Globe className="h-4 w-4" />} Akses WAN
           </Button>
           <Button variant="destructive" onClick={doReboot} disabled={rebooting || !wifi?.deviceId} title={!wifi?.deviceId ? "Nuk ka TR-069 për këtë ONU" : undefined}>
             {rebooting ? <Spinner /> : <Power className="h-4 w-4" />} Riniso ONU
@@ -203,6 +227,21 @@ export default function OnuDetailPage() {
             action={!epon ? <Button variant="default" className="px-2 py-1 text-[11px]" onClick={() => setPppoeOpen(true)}><Pencil className="h-3 w-3" /> Ndrysho</Button> : undefined}
           >
             <div className="px-4">
+              <InfoRow
+                label="WAN IP"
+                value={
+                  onu.wanIp ? (
+                    <span className="flex items-center gap-2">
+                      <a href={`http://${onu.wanIp}`} target="_blank" rel="noopener noreferrer" className="font-mono text-primary hover:underline">
+                        {onu.wanIp} ↗
+                      </a>
+                      <PingButton ip={onu.wanIp} />
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">–</span>
+                  )
+                }
+              />
               <InfoRow label="WAN Mode" value={onu.pppoeUser ? "PPPoE" : "Profile (OMCI)"} />
               <InfoRow label="PPPoE User" value={onu.pppoeUser ? <span className="font-mono text-blue-600">{onu.pppoeUser}</span> : "–"} />
               <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-muted-foreground">rifresko për ta parë</span>} />
