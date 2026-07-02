@@ -27,6 +27,7 @@ import { PppoeModal } from "@/components/pppoe-modal";
 import { WifiModal } from "@/components/wifi-modal";
 import { ReplaceOnuModal } from "@/components/replace-onu-modal";
 import { PingButton } from "@/components/ping-button";
+import { OnuLivePanel } from "@/components/onu-live-panel";
 import { isEponPort, onuConnectionKind } from "@oltflow/core";
 
 type OnuDetail = OnuRow & { oltId: number; oltName: string };
@@ -249,6 +250,16 @@ export default function OnuDetailPage() {
           </SectionCard>
         </div>
       </div>
+
+      {!epon && (
+        <OnuLivePanel
+          onuId={onu.id}
+          onuType={onu.type}
+          state={onu.state}
+          onuRx={onu.onuRx}
+          lastCause={live?.history?.[live.history.length - 1]?.cause}
+        />
+      )}
 
       {live?.history && (
         <SectionCard title={<><CalendarDays className="inline h-4 w-4" /> Historia e Lidhjes <span className="text-[11px] font-normal text-muted-foreground">{live.history.length} ngjarje</span></>} className="mt-4">

@@ -210,3 +210,51 @@ export function parseRunningConfig(raw: string): RunningConfig {
 export function parseSignal(raw: string): ParsedSignal {
   return parseAttenuationOutput(raw);
 }
+
+export interface OnuInterfaceStats {
+  upBps: number; // Input rate (upstream, from subscriber)
+  downBps: number; // Output rate (downstream, to subscriber)
+  upPps: number;
+  downPps: number;
+  totalUpBytes: number;
+  totalDownBytes: number;
+}
+
+/** Parses `show interface <onu-iface>` — per-ONU live rate + total counters.
+ * On ZTE, Input = upstream (from subscriber), Output = downstream (to subscriber). */
+export function parseOnuInterfaceStats(raw: string): OnuInterfaceStats {
+  const num = (re: RegExp): number => {
+    const m = re.exec(raw);
+    return m ? Number(m[1]) : 0;
+  };
+  // "   Input rate :   36 Bps   0 pps"  /  "   Output rate:  71 Bps  0 pps"
+  const inRate = /Input rate\s*:\s*(\d+)\s*Bps\s*(\d+)\s*pps/.exec(raw);
+  const outRate = /Output rate\s*:\s*(\d+)\s*Bps\s*(\d+)\s*pps/.exec(raw);
+  // Total section: "Input:\n Bytes:47706326 ..." then "Output:\n Bytes:279996436 ..."
+  const totalUp = /Input:\s*[\r\n]+\s*Bytes:(\d+)/.exec(raw);
+  const totalDown = /Output:\s*[\r\n]+\s*Bytes:(\d+)/.exec(raw);
+  return {
+    upBps: inRate ? Number(inRate[1]) : 0,
+    downBps: outRate ? Number(outRate[1]) : 0,
+    upPps: inRate ? Number(inRate[2]) : 0,
+    downPps: outRate ? Number(outRate[2]) : 0,
+    totalUpBytes: totalUp ? Number(totalUp[1]) : num(/Input[\s\S]*?Bytes:(\d+)/),
+    totalDownBytes: totalDown ? Number(totalDown[1]) : num(/Output[\s\S]*?Bytes:(\d+)/),
+  };
+}
+
+export interface OnuMacEntry {
+  mac: string; // xxxx.xxxx.xxxx (ZTE format, lowercased)
+  vlan: string | null;
+}
+
+/** Parses `show mac gpon onu <onu-iface>` — the downstream MAC address table.
+ * Columns: "Mac address  Vlan  Type  Port  Vc". */
+export function parseOnuMacTable(raw: string): OnuMacEntry[] {
+  const out: OnuMacEntry[] = [];
+  const re = /\b([0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4})\s+(\d+)?/g;
+  for (const m of raw.matchAll(re)) {
+    out.push({ mac: m[1].toLowerCase(), vlan: m[2] ?? null });
+  }
+  return out;
+}

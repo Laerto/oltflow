@@ -4,6 +4,7 @@ export const JOB_NAMES = {
   oltConnectTest: "olt-connect-test",
   scanUnconfigured: "scan-unconfigured",
   refreshOnu: "refresh-onu",
+  onuLive: "onu-live",
   provision: "provision",
   pppoe: "pppoe",
   authorizePppoe: "authorize-pppoe",
@@ -29,6 +30,11 @@ export interface ScanUnconfiguredPayload {
   oltId: number;
 }
 export interface RefreshOnuPayload {
+  oltId: number;
+  onuId: number;
+  ponPort: string;
+}
+export interface OnuLivePayload {
   oltId: number;
   onuId: number;
   ponPort: string;

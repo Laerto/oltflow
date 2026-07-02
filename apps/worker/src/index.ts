@@ -9,6 +9,7 @@ import { syncOltSignals } from "./sync/signals.js";
 import { handleOltConnectTest } from "./handlers/oltConnectTest.js";
 import { handleScanUnconfigured } from "./handlers/scanUnconfigured.js";
 import { handleRefreshOnu } from "./handlers/refreshOnu.js";
+import { handleOnuLive } from "./handlers/onuLive.js";
 import { handleProvision } from "./handlers/provision.js";
 import { handlePppoe } from "./handlers/pppoe.js";
 import { handleAuthorizePppoe } from "./handlers/authorizePppoe.js";
@@ -28,6 +29,7 @@ const HANDLERS: Record<string, Handler> = {
   [JOB_NAMES.oltConnectTest]: handleOltConnectTest,
   [JOB_NAMES.scanUnconfigured]: handleScanUnconfigured,
   [JOB_NAMES.refreshOnu]: handleRefreshOnu,
+  [JOB_NAMES.onuLive]: handleOnuLive,
   [JOB_NAMES.provision]: handleProvision,
   [JOB_NAMES.pppoe]: handlePppoe,
   [JOB_NAMES.authorizePppoe]: handleAuthorizePppoe,
@@ -58,6 +60,8 @@ async function processJob(job: BullJob) {
   if (!handler) throw new Error(`Nuk ka handler për job "${job.name}"`);
 
   const jobRowId = job.data.jobRowId as string | undefined;
+  // High-frequency on-demand polls (live ONU view) skip the audit log to avoid flooding it.
+  const silent = job.name === JOB_NAMES.onuLive;
   if (jobRowId) {
     await prisma.job.update({ where: { id: jobRowId }, data: { status: "active" } }).catch(() => {});
   }
@@ -70,7 +74,7 @@ async function processJob(job: BullJob) {
         data: { status: "done", output: JSON.stringify(result) },
       });
     }
-    await writeAudit({
+    if (!silent) await writeAudit({
       action: job.name,
       oltId: job.data.oltId ?? null,
       ponPort: job.data.ponPort ?? null,
@@ -83,13 +87,14 @@ async function processJob(job: BullJob) {
     if (jobRowId) {
       await prisma.job.update({ where: { id: jobRowId }, data: { status: "failed", error: message } });
     }
-    await writeAudit({
-      action: job.name,
-      oltId: job.data.oltId ?? null,
-      ponPort: job.data.ponPort ?? null,
-      payload: sanitizePayload(job.data),
-      result: "error",
-    });
+    if (!silent)
+      await writeAudit({
+        action: job.name,
+        oltId: job.data.oltId ?? null,
+        ponPort: job.data.ponPort ?? null,
+        payload: sanitizePayload(job.data),
+        result: "error",
+      });
     throw err;
   }
 }

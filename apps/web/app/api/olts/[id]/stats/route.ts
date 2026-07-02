@@ -7,7 +7,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const oltId = Number(id);
 
-  const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const now = Date.now();
+  const in7Days = new Date(now + 7 * 24 * 60 * 60 * 1000);
+  // Only clients worth chasing: expiring within 7 days OR expired at most 14 days ago.
+  // Anyone expired long ago (months/years) has left the network — exclude them.
+  const graceStart = new Date(now - 14 * 24 * 60 * 60 * 1000);
 
   const [total, online, recentSignals, expiringList] = await Promise.all([
     prisma.onu.count({ where: { oltId } }),
@@ -26,7 +30,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // Clients whose RADIUS subscription has expired or expires within 7 days — the
     // office works this list daily to call people in to pay. Soonest (most overdue) first.
     prisma.onu.findMany({
-      where: { oltId, expiration: { not: null, lte: in7Days } },
+      where: { oltId, expiration: { gte: graceStart, lte: in7Days } },
       select: { id: true, name: true, ponPort: true, expiration: true, pppoeUser: true },
       orderBy: { expiration: "asc" },
       take: 60,

@@ -65,6 +65,7 @@ export const api = {
       `/api/onus/${onuId}/signal-history`
     ),
   refreshOnu: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}/refresh`, { method: "POST" }),
+  onuLive: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}/live`, { method: "POST" }),
   replaceOnu: (onuId: number, input: { onuSerial: string; onuType: string }) =>
     request<{ jobId: string }>(`/api/onus/${onuId}/replace`, { method: "POST", body: JSON.stringify(input) }),
   deleteOnu: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}`, { method: "DELETE" }),
@@ -129,6 +130,22 @@ export interface OnuRow {
   attenUp: number | null;
   attenDown: number | null;
   signalLevel: string | null;
+}
+
+export interface OnuMacEntry {
+  mac: string;
+  vlan: string | null;
+}
+export interface OnuLiveResult {
+  onuInterface: string;
+  upBps: number;
+  downBps: number;
+  upPps: number;
+  downPps: number;
+  totalUpBytes: number;
+  totalDownBytes: number;
+  macs: OnuMacEntry[];
+  busy?: boolean;
 }
 
 export interface WlanBand {

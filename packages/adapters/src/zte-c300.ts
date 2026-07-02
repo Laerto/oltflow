@@ -9,10 +9,13 @@ import {
   parseRunningConfig,
   parseSignal,
   parseFirstMac,
+  parseOnuInterfaceStats,
+  parseOnuMacTable,
   parseEponOnuDetail,
   parseEponRunningConfig,
   extractZteError,
   type UncfgOnu,
+  type OnuMacEntry,
 } from "./zte-parsers.js";
 import {
   parsePonPort,
@@ -422,6 +425,35 @@ export async function getOnuDetail(creds: OltCreds, ponPort: string): Promise<On
     vlan: parsedRunning.vlan,
     history: parseConnectionHistory(detail),
   };
+}
+
+export interface OnuLiveResult {
+  onuInterface: string;
+  upBps: number;
+  downBps: number;
+  upPps: number;
+  downPps: number;
+  totalUpBytes: number;
+  totalDownBytes: number;
+  macs: OnuMacEntry[];
+}
+
+/** Live per-ONU snapshot for the on-demand "View" panel: instantaneous traffic rate
+ * (`show interface`) + the downstream MAC table (`show mac gpon onu`). Two fast read-only
+ * commands — cheap enough to poll every few seconds while an operator watches one ONU. */
+export async function getOnuLive(creds: OltCreds, ponPort: string): Promise<OnuLiveResult> {
+  const iface = onuInterface(parsePonPort(ponPort));
+  const session = await login(creds);
+  let statsOut: string, macOut: string;
+  try {
+    await session.sendCommand("terminal length 0", 500);
+    statsOut = await session.sendCommand(`show interface ${iface}`, 1500);
+    macOut = await session.sendCommand(`show mac gpon onu ${iface}`, 1500);
+  } finally {
+    session.close();
+  }
+  const stats = parseOnuInterfaceStats(statsOut);
+  return { onuInterface: iface, ...stats, macs: parseOnuMacTable(macOut) };
 }
 
 async function runCommandSequence(session: CliSession, commands: string[]): Promise<string> {
