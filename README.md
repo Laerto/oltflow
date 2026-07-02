@@ -35,4 +35,4 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-❯ we have build a web app mor menaging OLTs C300 and C320 please i need you to make improvments on UI/UX to look modern with more premium icons and look and also with responsivnes on mobiles and tablets
+❯ Check out our [Next.js deployment documentation]
