@@ -4,6 +4,7 @@ import { enqueue } from "./queue.js";
 import { syncRadius } from "./sync/radius.js";
 import { checkAlarms } from "./sync/alarms.js";
 import { syncPonTraffic } from "./sync/pon-traffic.js";
+import { pruneOldData } from "./sync/prune.js";
 
 const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS ?? 60_000);
 const DETAIL_INTERVAL_MS = Number(process.env.DETAIL_INTERVAL_MS ?? 900_000); // 15 min
@@ -12,6 +13,7 @@ const RADIUS_INTERVAL_MS = Number(process.env.RADIUS_INTERVAL_MS ?? 60_000);
 const ALARM_INTERVAL_MS = Number(process.env.ALARM_INTERVAL_MS ?? 120_000);
 // 30s keeps the 32-bit octet counters from wrapping unnoticed at typical PON loads.
 const PON_TRAFFIC_INTERVAL_MS = Number(process.env.PON_TRAFFIC_INTERVAL_MS ?? 30_000);
+const PRUNE_INTERVAL_MS = Number(process.env.PRUNE_INTERVAL_MS ?? 6 * 60 * 60 * 1000); // 6h
 
 /** Spreads enqueue calls across a fraction of the tick interval instead of
  * firing all at once, so e.g. 100 OLTs don't all open sessions in the same
@@ -72,6 +74,11 @@ async function tickPonTraffic() {
   await syncPonTraffic();
 }
 
+async function tickPrune() {
+  const n = await pruneOldData();
+  if (n.signals || n.jobs || n.audit) console.log(`[scheduler] pruned signals=${n.signals} jobs=${n.jobs} audit=${n.audit}`);
+}
+
 export function startScheduler() {
   loop(tickInventory, SYNC_INTERVAL_MS, "sync-inventory");
   loop(tickDetail, DETAIL_INTERVAL_MS, "sync-detail");
@@ -79,7 +86,8 @@ export function startScheduler() {
   loop(tickRadius, RADIUS_INTERVAL_MS, "sync-radius");
   loop(tickAlarms, ALARM_INTERVAL_MS, "alarms");
   loop(tickPonTraffic, PON_TRAFFIC_INTERVAL_MS, "pon-traffic");
+  loop(tickPrune, PRUNE_INTERVAL_MS, "prune");
   console.log(
-    `[scheduler] inventory ${SYNC_INTERVAL_MS}ms, detail ${DETAIL_INTERVAL_MS}ms, signals ${SIGNAL_INTERVAL_MS}ms, radius ${RADIUS_INTERVAL_MS}ms, alarms ${ALARM_INTERVAL_MS}ms, pon-traffic ${PON_TRAFFIC_INTERVAL_MS}ms`
+    `[scheduler] inventory ${SYNC_INTERVAL_MS}ms, detail ${DETAIL_INTERVAL_MS}ms, signals ${SIGNAL_INTERVAL_MS}ms, radius ${RADIUS_INTERVAL_MS}ms, alarms ${ALARM_INTERVAL_MS}ms, pon-traffic ${PON_TRAFFIC_INTERVAL_MS}ms, prune ${PRUNE_INTERVAL_MS}ms`
   );
 }
