@@ -29,7 +29,10 @@ export async function createSessionCookie(user: SessionPayload): Promise<void> {
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Secure cookies require HTTPS. The panel is served over plain HTTP behind nginx, so
+    // this is decoupled from NODE_ENV (which is "production" once we run a prod build) —
+    // set COOKIE_SECURE=true only once the site is behind TLS, else login breaks over HTTP.
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL_SECONDS,

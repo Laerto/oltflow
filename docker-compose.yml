@@ -40,6 +40,12 @@ services:
     env_file: .env
     environment:
       PORT: "3000"
+      NODE_ENV: "production"
+    # Production build (frees ~2GB RAM vs `next dev` + serves instantly, no per-request
+    # recompile). Rebuilds on start so a fresh .next volume is always valid. Cookie stays
+    # non-secure over HTTP via COOKIE_SECURE (see lib/auth.ts). Flip back to `npm run dev`
+    # for iterative web development.
+    command: ["sh", "-c", "npm run build -w apps/web && npm run start -w apps/web"]
     ports:
       - "${WEB_PORT:-3001}:3000"
     volumes:
