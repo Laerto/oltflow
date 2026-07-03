@@ -44,3 +44,18 @@ export async function enqueueJob(
   await queue.add(type, { ...payload, jobRowId: id }, { jobId: id });
   return id;
 }
+
+/**
+ * Fire-and-forget enqueue with NO tracked `Job` row — for the scheduler-style sync jobs
+ * (sync-inventory/detail/signals) the worker handles untracked. Used to kick a brand-new
+ * OLT's first sweep immediately instead of waiting for the next scheduler tick (which is
+ * what made a freshly-added OLT show zero ONUs until the worker happened to restart).
+ * `delayMs` staggers the sweeps so they don't all contend on the OLT lock at once.
+ */
+export async function enqueueUntracked(
+  type: JobName,
+  payload: Record<string, unknown>,
+  delayMs?: number
+): Promise<void> {
+  await queue.add(type, payload, { delay: delayMs, removeOnComplete: 200, removeOnFail: 500 });
+}

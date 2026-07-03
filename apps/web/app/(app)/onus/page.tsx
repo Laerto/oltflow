@@ -68,12 +68,29 @@ const CSV_COLS: { key: keyof OnuRow; label: string }[] = [
   { key: "onlineDuration", label: "Online" },
 ];
 
-/** Client-side CSV export of the given ONU rows (UTF-8 BOM for Excel). */
+// Distinct tint per OLT so the OLT column reads as categories at a glance in "All OLTs" mode.
+const OLT_TINTS = [
+  "border-blue-500/30 bg-blue-500/10 text-blue-600",
+  "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",
+  "border-amber-500/30 bg-amber-500/10 text-amber-600",
+  "border-violet-500/30 bg-violet-500/10 text-violet-600",
+  "border-rose-500/30 bg-rose-500/10 text-rose-600",
+  "border-cyan-500/30 bg-cyan-500/10 text-cyan-600",
+  "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600",
+  "border-teal-500/30 bg-teal-500/10 text-teal-600",
+];
+const oltTint = (id?: number) => OLT_TINTS[(((id ?? 0) % OLT_TINTS.length) + OLT_TINTS.length) % OLT_TINTS.length];
+
+/** Client-side CSV export of the given ONU rows (UTF-8 BOM for Excel). Prepends an OLT
+ * column when the rows span multiple OLTs (the "All OLTs" view). */
 function exportCsv(rows: OnuRow[]) {
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const cols = rows.some((r) => r.oltName)
+    ? [{ key: "oltName" as keyof OnuRow, label: "OLT" }, ...CSV_COLS]
+    : CSV_COLS;
   const csv = [
-    CSV_COLS.map((c) => c.label).join(","),
-    ...rows.map((r) => CSV_COLS.map((c) => esc(r[c.key])).join(",")),
+    cols.map((c) => c.label).join(","),
+    ...rows.map((r) => cols.map((c) => esc(r[c.key])).join(",")),
   ].join("\n");
   const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
@@ -162,7 +179,7 @@ export default function OnusPage() {
 }
 
 function OnusContent() {
-  const { currentOlt } = useOlts();
+  const { currentOlt, allOlts, olts } = useOlts();
   const me = useMe();
   const operate = can.operate(me?.role);
   const admin = can.admin(me?.role);
@@ -182,16 +199,18 @@ function OnusContent() {
   );
   const [sortExpiry, setSortExpiry] = useState(false);
   const [comfortable, setComfortable] = useState(false);
-  const [pppoeTarget, setPppoeTarget] = useState<string | null>(null);
+  const [pppoeTarget, setPppoeTarget] = useState<{ oltId: number; ponPort: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OnuRow | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busyMsg, setBusyMsg] = useState<string | null>(null);
 
   async function load() {
-    if (!currentOlt) return;
+    if (!allOlts && !currentOlt) return;
     setLoading(true);
     try {
-      const { onus } = await api.onus(currentOlt.id);
+      // "All OLTs" mode hits the global endpoint so support can find any customer
+      // across the whole fleet; otherwise the per-OLT list.
+      const { onus } = allOlts ? await api.allOnus() : await api.onus(currentOlt!.id);
       setOnus(onus);
     } finally {
       setLoading(false);
@@ -238,7 +257,7 @@ function OnusContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentOlt?.id]);
+  }, [currentOlt?.id, allOlts]);
 
   const models = Array.from(new Set(onus.map((o) => o.type).filter(Boolean) as string[])).sort();
 
@@ -263,7 +282,7 @@ function OnusContent() {
       })
     : base;
 
-  if (!currentOlt) {
+  if (!currentOlt && !allOlts) {
     return (
       <Card>
         <EmptyState>Zgjidh ose shto një OLT.</EmptyState>
@@ -271,15 +290,17 @@ function OnusContent() {
     );
   }
 
-  const rowPad = comfortable ? "[&>td]:py-3" : "[&>td]:py-1.5";
+  const rowPad = comfortable ? "[&>td]:py-3" : "[&>td]:py-1";
 
   return (
     <div>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">ONU-të e Konfiguruara</h1>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">
+            {allOlts ? "ONU-të — Të gjitha OLT-të" : "ONU-të e Konfiguruara"}
+          </h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {currentOlt.name} · {filtered.length} nga {onus.length} ONU
+            {allOlts ? `${olts.length} OLT` : currentOlt?.name} · {filtered.length} nga {onus.length} ONU
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -381,6 +402,9 @@ function OnusContent() {
               <Card key={o.id} className="p-3.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
+                    {allOlts && o.oltName && (
+                      <Badge variant="outline" className={`mb-1 ${oltTint(o.oltId)}`}>{o.oltName}</Badge>
+                    )}
                     <div className="truncate font-semibold">{o.name || "–"}</div>
                     <div className="mt-0.5 font-mono text-[11px] text-primary">
                       {formatPonPort(o.ponPort)} {isEponPort(o.ponPort) && <Badge variant="secondary">EPON</Badge>}
@@ -401,7 +425,7 @@ function OnusContent() {
                     </>
                   )}
                   {!o.wanIp && onuConnectionKind(o.type) === "bridge" && (
-                    <WinboxButton onuId={o.id} mgmtIp={o.mgmtIp} mac={o.mac} onSaved={load} />
+                    <WinboxButton onuId={o.id} mgmtIp={o.mgmtIp} winboxUrl={o.winboxUrl} mac={o.mac} onSaved={load} />
                   )}
                   {o.expiration && (
                     <span className="text-[11px] text-muted-foreground">Skadenca: <ExpiryCell iso={o.expiration} /></span>
@@ -414,7 +438,7 @@ function OnusContent() {
                     </Link>
                   </Button>
                   {operate && !isEponPort(o.ponPort) ? (
-                    <Button size="sm" variant="secondary" onClick={() => setPppoeTarget(o.ponPort)}>
+                    <Button size="sm" variant="secondary" onClick={() => { const oid = o.oltId ?? currentOlt?.id; if (oid) setPppoeTarget({ oltId: oid, ponPort: o.ponPort }); }}>
                       <Lock className="mr-1 h-4 w-4" /> PPPoE
                     </Button>
                   ) : (
@@ -427,7 +451,7 @@ function OnusContent() {
 
           {/* Desktop: table — fixed layout so columns never reflow on filter/refresh */}
           <div className="hidden overflow-x-auto rounded-md border bg-card md:block">
-            <Table className="min-w-[1100px] table-fixed">
+            <Table className={`${allOlts ? "min-w-[1240px]" : "min-w-[1100px]"} table-fixed`}>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-10">
@@ -440,6 +464,7 @@ function OnusContent() {
                       />
                     )}
                   </TableHead>
+                  {allOlts && <TableHead className="w-32 text-[10px] uppercase">OLT</TableHead>}
                   <TableHead className="w-24 text-[10px] uppercase">Status</TableHead>
                   <TableHead className="w-36 text-[10px] uppercase">Serial</TableHead>
                   <TableHead className="w-64 text-[10px] uppercase">Emër Mbiemër</TableHead>
@@ -480,6 +505,11 @@ function OnusContent() {
                           />
                         )}
                       </TableCell>
+                      {allOlts && (
+                        <TableCell className="truncate">
+                          <Badge variant="outline" className={oltTint(o.oltId)} title={o.oltName}>{o.oltName}</Badge>
+                        </TableCell>
+                      )}
                       <TableCell className="border-l-[3px]" style={{ borderLeftColor: borderColor }}>
                         <StatusBadge state={o.state} />
                       </TableCell>
@@ -509,7 +539,7 @@ function OnusContent() {
                             <PingButton ip={o.wanIp} />
                           </div>
                         ) : onuConnectionKind(o.type) === "bridge" ? (
-                          <WinboxButton onuId={o.id} mgmtIp={o.mgmtIp} mac={o.mac} onSaved={load} />
+                          <WinboxButton onuId={o.id} mgmtIp={o.mgmtIp} winboxUrl={o.winboxUrl} mac={o.mac} onSaved={load} />
                         ) : (
                           <span className="text-muted-foreground">–</span>
                         )}
@@ -522,20 +552,20 @@ function OnusContent() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
-                          <Button asChild size="sm" className="h-7 px-3 text-[11px]">
+                          <Button asChild size="sm" className="h-6 px-2.5 text-[11px]">
                             <Link href={`/onus/${o.id}`}>
                               <Eye className="mr-1 h-3.5 w-3.5" /> View
                             </Link>
                           </Button>
                           {operate && !isEponPort(o.ponPort) && (
-                            <Button variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Ndrysho PPPoE" onClick={() => setPppoeTarget(o.ponPort)}>
+                            <Button variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" title="Ndrysho PPPoE" onClick={() => { const oid = o.oltId ?? currentOlt?.id; if (oid) setPppoeTarget({ oltId: oid, ponPort: o.ponPort }); }}>
                               <Lock className="h-4 w-4" />
                             </Button>
                           )}
                           {operate && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Më shumë">
+                                <Button variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" title="Më shumë">
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -563,7 +593,7 @@ function OnusContent() {
       )}
 
       {pppoeTarget && (
-        <PppoeModal open oltId={currentOlt.id} ponPort={pppoeTarget} onClose={() => setPppoeTarget(null)} onDone={load} />
+        <PppoeModal open oltId={pppoeTarget.oltId} ponPort={pppoeTarget.ponPort} onClose={() => setPppoeTarget(null)} onDone={load} />
       )}
 
       {deleteTarget && (

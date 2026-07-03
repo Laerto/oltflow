@@ -19,7 +19,7 @@ import { api, type UncfgOnu } from "@/lib/api";
 import { ProvisionModal } from "@/components/provision-modal";
 
 export default function UnconfiguredPage() {
-  const { currentOlt } = useOlts();
+  const { currentOlt, allOlts } = useOlts();
   const [onus, setOnus] = useState<UncfgOnu[]>([]);
   const [target, setTarget] = useState<UncfgOnu | null>(null);
 
@@ -45,7 +45,7 @@ export default function UnconfiguredPage() {
   if (!currentOlt) {
     return (
       <Card>
-        <EmptyState>Zgjidh ose shto një OLT.</EmptyState>
+        <EmptyState>{allOlts ? "Autorizimi bëhet për një OLT — zgjidh një OLT specifik lart." : "Zgjidh ose shto një OLT."}</EmptyState>
       </Card>
     );
   }

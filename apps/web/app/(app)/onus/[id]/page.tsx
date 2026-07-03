@@ -14,6 +14,7 @@ import {
   Power,
   RefreshCw,
   Satellite,
+  Trash2,
   Wifi,
 } from "lucide-react";
 import { api, ApiError, pollJob, type OnuRow, type WifiDevice } from "@/lib/api";
@@ -26,6 +27,7 @@ import { Alert } from "@/components/ui/alert";
 import { PppoeModal } from "@/components/pppoe-modal";
 import { WifiModal } from "@/components/wifi-modal";
 import { ReplaceOnuModal } from "@/components/replace-onu-modal";
+import { DeleteOnuDialog } from "@/components/delete-onu-dialog";
 import { PingButton } from "@/components/ping-button";
 import { OnuLivePanel } from "@/components/onu-live-panel";
 import { useMe } from "@/app/(app)/providers";
@@ -55,6 +57,7 @@ export default function OnuDetailPage() {
   const [pppoeOpen, setPppoeOpen] = useState(false);
   const [wifiOpen, setWifiOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [rebooting, setRebooting] = useState(false);
   const [wanBusy, setWanBusy] = useState(false);
   const [rebootMsg, setRebootMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -182,7 +185,12 @@ export default function OnuDetailPage() {
           )}
           {operate && (
             <Button variant="destructive" onClick={doReboot} disabled={rebooting || !wifi?.deviceId} title={!wifi?.deviceId ? "Nuk ka TR-069 për këtë ONU" : undefined}>
-              {rebooting ? <Spinner /> : <Power className="h-4 w-4" />} Riniso ONU
+              {rebooting ? <Spinner /> : <Power className="h-4 w-4" />} Reboot ONU
+            </Button>
+          )}
+          {admin && !epon && (
+            <Button variant="destructive" onClick={() => setDeleteOpen(true)} title="Fshi këtë ONU nga OLT-i">
+              <Trash2 className="h-4 w-4" /> Fshi ONU
             </Button>
           )}
         </div>
@@ -346,6 +354,16 @@ export default function OnuDetailPage() {
           initialSsid2g={wifi.wlan2g?.ssid}
           initialSsid5g={wifi.wlan5g?.ssid}
           onDone={load}
+        />
+      )}
+      {deleteOpen && (
+        <DeleteOnuDialog
+          open
+          onuId={onu.id}
+          ponPort={onu.ponPort}
+          name={onu.name}
+          onClose={() => setDeleteOpen(false)}
+          onDone={() => router.push("/onus")}
         />
       )}
     </div>

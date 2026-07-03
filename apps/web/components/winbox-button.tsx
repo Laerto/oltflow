@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AppWindow, Pencil, ExternalLink, Copy, Check } from "lucide-react";
+import { AppWindow, Pencil, Copy, Check } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,19 +15,23 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 /**
- * Access helper for the Mikrotik behind a bridge ONU. Winbox 3.x does NOT register a
- * `winbox://` URL handler, so a browser can't launch it — instead the primary action is
- * COPY the IP (paste into Winbox "Connect To", which defaults to port 8291). Also offers
- * WebFig (browser) and a `winbox://IP:8291` link for those on Winbox 4 (which does register it).
+ * Access helper for the Mikrotik behind a bridge ONU. These routers expose only Winbox
+ * (8291) — SSH/API/WebFig are disabled — so the primary action is a ONE-CLICK `winbox://`
+ * launch (`winboxUrl`, built server-side with the shared creds) that opens Winbox already
+ * logged in. Requires the small per-PC handler in tools/winbox-handler/. When the handler
+ * or creds are absent the button still works as a COPY-IP fallback (paste into Winbox
+ * "Connect To", port 8291).
  */
 export function WinboxButton({
   onuId,
   mgmtIp,
+  winboxUrl,
   mac,
   onSaved,
 }: {
   onuId: number;
   mgmtIp: string | null;
+  winboxUrl?: string | null;
   mac?: string | null;
   onSaved?: (ip: string | null) => void;
 }) {
@@ -67,23 +71,30 @@ export function WinboxButton({
     <>
       {mgmtIp ? (
         <span className="inline-flex items-center gap-1">
-          {/* Click = copy IP for pasting into Winbox "Connect To" */}
-          <button
-            onClick={(e) => copyIp(mgmtIp, e)}
-            className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary hover:bg-primary/20"
-            title="Kopjo IP-në për Winbox (Connect To)"
-          >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {mgmtIp}
+          {winboxUrl ? (
+            // One-click: open Winbox already logged in (via the winbox:// PC handler).
+            <a
+              href={winboxUrl}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary hover:bg-primary/20"
+              title={`Hap Winbox — kyçje automatike te ${mgmtIp}`}
+            >
+              <AppWindow className="h-3.5 w-3.5" /> {mgmtIp}
+            </a>
+          ) : (
+            // No handler/creds → fall back to copy IP for pasting into Winbox "Connect To".
+            <button
+              onClick={(e) => copyIp(mgmtIp, e)}
+              className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary hover:bg-primary/20"
+              title="Kopjo IP-në për Winbox (Connect To)"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {mgmtIp}
+            </button>
+          )}
+          {/* Copy IP — always available as a fallback if the one-click handler isn't installed */}
+          <button onClick={(e) => copyIp(mgmtIp, e)} className="text-muted-foreground hover:text-foreground" title="Kopjo IP-në">
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
-          <a
-            href={`http://${mgmtIp}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-foreground"
-            title="Hap WebFig (paneli web i Mikrotik-ut)"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
           <button onClick={() => { setIp(mgmtIp); setOpen(true); }} className="text-muted-foreground hover:text-foreground" title="Ndrysho IP-në">
             <Pencil className="h-3 w-3" />
           </button>
@@ -120,19 +131,16 @@ export function WinboxButton({
             )}
             {ip.trim() && (
               <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                <button onClick={() => copyIp(ip.trim())} className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 font-mono font-semibold text-primary">
+                <a href={`winbox://${ip.trim()}`} className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 font-semibold text-primary" title="Hap Winbox te kjo IP (kërkon handler-in winbox://)">
+                  <AppWindow className="h-3.5 w-3.5" /> Hap Winbox
+                </a>
+                <button onClick={() => copyIp(ip.trim())} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-mono text-muted-foreground hover:text-foreground">
                   {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "U kopjua" : `Kopjo ${ip.trim()}`}
                 </button>
-                <a href={`http://${ip.trim()}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-muted-foreground hover:text-foreground">
-                  <ExternalLink className="h-3.5 w-3.5" /> WebFig
-                </a>
-                <a href={`winbox://${ip.trim()}:8291`} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-muted-foreground hover:text-foreground" title="Vetëm nëse ke Winbox 4 (regjistron winbox://)">
-                  <AppWindow className="h-3.5 w-3.5" /> Winbox 4
-                </a>
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">
-              Winbox 3 nuk hapet nga shfletuesi — <strong>kopjo IP-në</strong> dhe ngjite te &ldquo;Connect To&rdquo; në Winbox (porta 8291 është default).
+              Ruaje IP-në për kyçje me një klik (auto-login) nga lista. Kërkon handler-in <code>winbox://</code> të instaluar në PC (shih <code>tools/winbox-handler</code>). Përndryshe <strong>kopjo IP-në</strong> dhe ngjite te &ldquo;Connect To&rdquo; në Winbox (porta 8291).
             </p>
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Mbyll</Button>

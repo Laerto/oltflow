@@ -31,7 +31,7 @@ import { OltSelector } from "./olt-selector";
 
 export function Shell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { olts, currentOlt, setCurrentOltId, refresh } = useOlts();
+  const { olts, currentOlt, allOlts, setCurrentOltId, refresh } = useOlts();
   const me = useMe();
   const [addOpen, setAddOpen] = useState(false);
 
@@ -53,7 +53,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="text-sm font-semibold lg:hidden">OLTFlow</span>
           </div>
           <div className="flex items-center gap-3">
-            <OltSelector olts={olts} current={currentOlt} onChange={setCurrentOltId} />
+            <OltSelector olts={olts} current={currentOlt} allOlts={allOlts} onChange={setCurrentOltId} />
             {can.admin(me?.role) && (
               <Button size="sm" onClick={() => setAddOpen(true)}>
                 <Plus className="mr-1 h-4 w-4" /> Shto OLT

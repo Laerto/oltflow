@@ -59,6 +59,7 @@ export const api = {
       expiring: { id: number; name: string | null; ponPort: string; expiration: string | null; pppoeUser: string | null }[];
     }>(`/api/olts/${oltId}/stats`),
   onus: (oltId: number) => request<{ onus: OnuRow[]; total: number }>(`/api/olts/${oltId}/onus`),
+  allOnus: () => request<{ onus: OnuRow[]; total: number }>(`/api/onus`),
   ponTraffic: (oltId: number) =>
     request<{
       available: boolean;
@@ -136,6 +137,8 @@ export interface OltCard {
 
 export interface OnuRow {
   id: number;
+  oltId?: number;
+  oltName?: string; // set only in the all-OLTs view, for the OLT column
   ponPort: string;
   serial: string | null;
   name: string | null;
@@ -149,6 +152,7 @@ export interface OnuRow {
   serviceProfile: string | null;
   mac: string | null;
   mgmtIp: string | null;
+  winboxUrl?: string | null;
   expiration: string | null;
   customer: string | null;
   lastSeen: string | null;

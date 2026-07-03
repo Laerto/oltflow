@@ -34,11 +34,15 @@ export function parseEponOnuDetail(raw: string): { type?: string; name?: string;
 }
 
 /** Parses an EPON ONU running config for the PPPoE username / VLAN. ZTE EPON carries PPPoE
- * under the voip module: `voip pppoe username <u> password <p>` + `vlan pppoe_vlan_<id>`. */
+ * in one of two places: bridge/voip ONUs put it under the voip module
+ * (`voip pppoe username <u> password <p>`), while route CPEs (e.g. F460) put it in the WAN
+ * section exactly like GPON (`pppoe 1 nat enable user <u> password <p>`). Without the WAN
+ * fallback, route EPON ONUs get no username → no RADIUS match → no WAN IP in the panel. */
 export function parseEponRunningConfig(raw: string): { pppoeUser?: string; vlan?: string } {
-  const u = /voip\s+pppoe\s+username\s+(\S+)/i.exec(raw);
+  const voip = /voip\s+pppoe\s+username\s+(\S+)/i.exec(raw);
+  const wan = /pppoe\s+1\s+nat\s+enable\s+user\s+(\S+)/i.exec(raw);
   const v = /pppoe_vlan_(\d+)/i.exec(raw);
-  return { pppoeUser: u?.[1], vlan: v?.[1] };
+  return { pppoeUser: voip?.[1] ?? wan?.[1], vlan: v?.[1] };
 }
 
 /** Parses the first MAC address from `show mac gpon onu <onu>` output (ZTE dotted form

@@ -3,9 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, type OltSummary, type Me } from "@/lib/api";
 
+/** Sentinel id for the "All OLTs" selection (aggregates every OLT in the ONU list). */
+export const ALL_OLTS_ID = -1;
+
 interface OltContextValue {
   olts: OltSummary[];
   currentOlt: OltSummary | null;
+  /** True when "All OLTs" is selected — currentOlt is null in that case. */
+  allOlts: boolean;
   setCurrentOltId: (id: number) => void;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -26,8 +31,10 @@ export function OltProvider({ children }: { children: ReactNode }) {
       const { olts } = await api.listOlts();
       setOlts(olts);
       setCurrentOltIdState((prev) => {
+        if (prev === ALL_OLTS_ID) return prev; // keep an explicit "All OLTs" selection
         if (prev && olts.some((o) => o.id === prev)) return prev;
         const stored = Number(localStorage.getItem(STORAGE_KEY));
+        if (stored === ALL_OLTS_ID) return ALL_OLTS_ID;
         if (stored && olts.some((o) => o.id === stored)) return stored;
         return olts[0]?.id ?? null;
       });
@@ -47,9 +54,10 @@ export function OltProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const currentOlt = olts.find((o) => o.id === currentOltId) ?? null;
+  const allOlts = currentOltId === ALL_OLTS_ID;
 
   return (
-    <OltContext.Provider value={{ olts, currentOlt, setCurrentOltId, loading, refresh }}>
+    <OltContext.Provider value={{ olts, currentOlt, allOlts, setCurrentOltId, loading, refresh }}>
       {children}
     </OltContext.Provider>
   );

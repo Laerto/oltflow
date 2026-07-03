@@ -100,7 +100,7 @@ function SignalLegend({
 }
 
 export default function DashboardPage() {
-  const { currentOlt, loading: oltsLoading } = useOlts();
+  const { currentOlt, allOlts, loading: oltsLoading } = useOlts();
   const [stats, setStats] = useState<Stats | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [history, setHistory] = useState<{ on: number }[]>(Array(20).fill({ on: 0 }));
@@ -154,6 +154,17 @@ export default function DashboardPage() {
         </div>
         <Skeleton className="h-48" />
       </div>
+    );
+  }
+
+  if (allOlts) {
+    return (
+      <Card>
+        <EmptyState>
+          Dashboard-i shfaqet për një OLT — zgjidh një OLT specifik lart, ose hap{" "}
+          <Link href="/onus" className="text-primary underline">ONU-të</Link> për pamjen e të gjitha OLT-ve.
+        </EmptyState>
+      </Card>
     );
   }
 

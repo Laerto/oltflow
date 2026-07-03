@@ -54,6 +54,21 @@ export interface AdapterOnuRow {
   state: string;
 }
 
+/**
+ * Reads a command's reply up to the next CLI prompt (`#`) instead of blocking a
+ * fixed delay. The ZTE prompt always ends in `#`, and detail-info/running-config/
+ * mac output never contains one, so this returns as soon as the reply lands
+ * (~50ms on a healthy link) vs the old fixed 0.8s. That turns a 400+ ONU detail
+ * sweep from ~15 min into ~2 min — the fixed-delay sweep overran the 15-min sync
+ * interval, tripped BullMQ's stall detection, and held the OLT lock long enough
+ * to starve the every-60s state pass (so a busy OLT's ONUs never gained detail).
+ * `capMs` bounds a slow/silent reply so a single ONU can't hang the whole sweep.
+ */
+async function readReply(session: CliSession, cmd: string, capMs = 3000): Promise<string> {
+  session.write(cmd);
+  return session.readUntil("#", capMs);
+}
+
 async function login(creds: OltCreds): Promise<CliSession> {
   const session = await connectSession(creds);
   try {
@@ -260,7 +275,7 @@ export async function scanOltInventory(
 
     for (const row of rows) {
       try {
-        const det = await session.sendCommand(`show gpon onu detail-info ${row.ponPort}`, 800);
+        const det = await readReply(session, `show gpon onu detail-info ${row.ponPort}`);
         const parsed = parseOnuDetail(det);
         row.serial = parsed.serial;
         row.name = parsed.name;
@@ -270,14 +285,14 @@ export async function scanOltInventory(
         row.lineProfile = parsed.lineProfile;
         row.serviceProfile = parsed.serviceProfile;
 
-        const run = await session.sendCommand(`show onu running config ${row.ponPort}`, 800);
+        const run = await readReply(session, `show onu running config ${row.ponPort}`);
         const runParsed = parseRunningConfig(run);
         row.pppoeUser = runParsed.pppoeUser;
         row.vlan = runParsed.vlan;
 
         // Learned MAC on the ONU port — for bridge ONUs this is the downstream Mikrotik,
         // the join key to RADIUS (Calling-Station-Id) for its live WAN IP.
-        const macOut = await session.sendCommand(`show mac gpon onu ${row.ponPort}`, 600);
+        const macOut = await readReply(session, `show mac gpon onu ${row.ponPort}`);
         row.mac = parseFirstMac(macOut);
       } catch {
         // Skip this ONU's detail on error, matching sync_service.py's per-ONU try/except.
@@ -369,13 +384,13 @@ export async function scanEponInventory(
     }
     for (const row of rows) {
       try {
-        const det = await session.sendCommand(`show onu detail-info ${row.ponPort}`, 800);
+        const det = await readReply(session, `show onu detail-info ${row.ponPort}`);
         const d = parseEponOnuDetail(det);
         row.name = d.name;
         row.type = d.type;
         if (d.mac) row.mac = d.mac;
 
-        const run = await session.sendCommand(`show onu running config ${row.ponPort}`, 800);
+        const run = await readReply(session, `show onu running config ${row.ponPort}`);
         const rc = parseEponRunningConfig(run);
         row.pppoeUser = rc.pppoeUser;
         row.vlan = rc.vlan;

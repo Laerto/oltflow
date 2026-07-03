@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { createOltSchema, encryptSecret, JOB_NAMES } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
-import { enqueueJob } from "@/lib/queue";
+import { enqueueJob, enqueueUntracked } from "@/lib/queue";
 
 const OLT_CRED_KEY = process.env.OLT_CRED_KEY ?? "";
 
@@ -76,6 +76,14 @@ export async function POST(request: Request) {
   });
 
   const jobId = await enqueueJob(JOB_NAMES.oltConnectTest, { oltId: olt.id }, { oltId: olt.id });
+
+  // Kick the first inventory/detail/signal sweep right now so the new OLT populates within
+  // seconds. Previously these ran only on the next scheduler tick, so a freshly-added OLT
+  // showed zero ONUs until the worker next restarted (which forced an immediate tick). The
+  // delays stagger the sweeps behind the connect-test so they don't fight over the OLT lock.
+  await enqueueUntracked(JOB_NAMES.syncInventory, { oltId: olt.id }, 2_000);
+  await enqueueUntracked(JOB_NAMES.syncSignals, { oltId: olt.id }, 4_000);
+  await enqueueUntracked(JOB_NAMES.syncDetail, { oltId: olt.id }, 6_000);
 
   return NextResponse.json({ olt: { id: olt.id, name: olt.name, ip: olt.ip }, jobId }, { status: 201 });
 }

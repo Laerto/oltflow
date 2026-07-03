@@ -14,12 +14,12 @@ import { api, pollJob, ApiError } from "@/lib/api";
 import { ONU_TYPES, TCONT_PROFILES, DEFAULT_VLAN_ID, DEFAULT_ONU_TYPE, DEFAULT_TCONT_PROFILE } from "@oltflow/core";
 
 export default function ProvisionPage() {
-  const { currentOlt } = useOlts();
+  const { currentOlt, allOlts } = useOlts();
 
   if (!currentOlt) {
     return (
       <Card>
-        <EmptyState>Zgjidh ose shto një OLT.</EmptyState>
+        <EmptyState>{allOlts ? "Provizionimi bëhet për një OLT — zgjidh një OLT specifik lart." : "Zgjidh ose shto një OLT."}</EmptyState>
       </Card>
     );
   }
