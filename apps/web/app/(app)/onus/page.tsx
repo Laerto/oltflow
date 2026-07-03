@@ -99,9 +99,9 @@ const BOX_LABEL: Record<string, string> = {
 
 function FilterBox({ label, color, children }: { label: string; color: keyof typeof BOX_BORDER; children: React.ReactNode }) {
   return (
-    <div className={`flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
-      <span className={`text-[10px] font-bold uppercase tracking-wide ${BOX_LABEL[color]}`}>{label}</span>
-      <div className="flex flex-wrap items-center gap-1">{children}</div>
+    <div className={`flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
+      <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide ${BOX_LABEL[color]}`}>{label}</span>
+      <div className="flex flex-nowrap items-center gap-1">{children}</div>
     </div>
   );
 }
@@ -110,7 +110,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition ${
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition ${
         active
           ? "border-primary bg-primary/15 text-primary"
           : "border-border bg-card text-muted-foreground hover:text-foreground"
@@ -146,7 +146,7 @@ function SignalChip({
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${active ? tone.active : `bg-card ${tone.idle}`}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition ${active ? tone.active : `bg-card ${tone.idle}`}`}
     >
       <Icon className="h-3.5 w-3.5" /> {label}
     </button>
@@ -328,8 +328,8 @@ function OnusContent() {
         </div>
       )}
 
-      {/* Filters — each group in its own colored box for clarity */}
-      <div className="mb-3 flex flex-wrap items-start gap-2">
+      {/* Filters — each group in its own colored box; single stable row (scrolls if narrow) */}
+      <div className="mb-3 flex items-stretch gap-2 overflow-x-auto pb-1">
         <FilterBox label="Status" color="slate">
           <Chip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>Të gjitha</Chip>
           <Chip active={statusFilter === "online"} onClick={() => setStatusFilter("online")}>Online</Chip>

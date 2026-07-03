@@ -1,6 +1,7 @@
 import { prisma } from "@oltflow/db";
 import { JOB_NAMES } from "@oltflow/core";
 import { enqueue } from "./queue.js";
+import { kv, WORKER_HEARTBEAT_KEY } from "./kv.js";
 import { syncRadius } from "./sync/radius.js";
 import { checkAlarms } from "./sync/alarms.js";
 import { syncPonTraffic } from "./sync/pon-traffic.js";
@@ -74,6 +75,13 @@ async function tickPonTraffic() {
   await syncPonTraffic();
 }
 
+// Liveness beacon for /api/health: key expires if no worker refreshes it, so the
+// web tier can report "worker down" instead of syncs just silently going stale.
+const HEARTBEAT_INTERVAL_MS = 30_000;
+async function tickHeartbeat() {
+  await kv.set(WORKER_HEARTBEAT_KEY, new Date().toISOString(), "EX", 90);
+}
+
 async function tickPrune() {
   const n = await pruneOldData();
   if (n.signals || n.jobs || n.audit) console.log(`[scheduler] pruned signals=${n.signals} jobs=${n.jobs} audit=${n.audit}`);
@@ -87,6 +95,7 @@ export function startScheduler() {
   loop(tickAlarms, ALARM_INTERVAL_MS, "alarms");
   loop(tickPonTraffic, PON_TRAFFIC_INTERVAL_MS, "pon-traffic");
   loop(tickPrune, PRUNE_INTERVAL_MS, "prune");
+  loop(tickHeartbeat, HEARTBEAT_INTERVAL_MS, "heartbeat");
   console.log(
     `[scheduler] inventory ${SYNC_INTERVAL_MS}ms, detail ${DETAIL_INTERVAL_MS}ms, signals ${SIGNAL_INTERVAL_MS}ms, radius ${RADIUS_INTERVAL_MS}ms, alarms ${ALARM_INTERVAL_MS}ms, pon-traffic ${PON_TRAFFIC_INTERVAL_MS}ms, prune ${PRUNE_INTERVAL_MS}ms`
   );

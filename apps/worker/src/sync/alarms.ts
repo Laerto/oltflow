@@ -1,11 +1,14 @@
 import { prisma } from "@oltflow/db";
 import { sendTelegram, telegramConfigured } from "../telegram.js";
+import { kv } from "../kv.js";
 
 // Fires a Telegram alert once per (ONU, alarm-type) and won't repeat until the
 // condition clears — so a persistently-offline ONU doesn't spam every tick.
+// The dedup set lives in Redis (not process memory) so a worker restart/deploy
+// doesn't re-fire an alert for every ONU that's still in the same bad state.
 // Alarm types per spec: offline, weak signal (< -27 dBm), expiry within 7 days.
 type AlarmType = "offline" | "signal" | "expiry";
-const active = new Set<string>(); // `${onuId}:${type}` currently alerted
+const ACTIVE_SET_KEY = "oltflow:alarm:active"; // members: `${onuId}:${type}`
 const SIGNAL_ALARM_DBM = -27;
 const EXPIRY_ALARM_DAYS = 7;
 
@@ -24,11 +27,18 @@ export async function checkAlarms(): Promise<number> {
   let sent = 0;
   const fire = async (id: number, type: AlarmType, text: string) => {
     const key = `${id}:${type}`;
-    if (active.has(key)) return; // already alerted, still active
-    active.add(key);
-    if (await sendTelegram(text)) sent++;
+    const isNew = await kv.sadd(ACTIVE_SET_KEY, key);
+    if (!isNew) return; // already alerted, still active
+    if (await sendTelegram(text)) {
+      sent++;
+    } else {
+      // Send failed (Telegram down / rate limited) — un-mark so the next tick retries.
+      await kv.srem(ACTIVE_SET_KEY, key).catch(() => {});
+    }
   };
-  const clear = (id: number, type: AlarmType) => active.delete(`${id}:${type}`);
+  const clear = async (id: number, type: AlarmType) => {
+    await kv.srem(ACTIVE_SET_KEY, `${id}:${type}`);
+  };
 
   for (const o of onus) {
     const who = `${o.name || o.serial || o.ponPort} (${o.serial ?? "-"})${o.mgmtIp ? ` · ${o.mgmtIp}` : ""}`;
@@ -38,7 +48,7 @@ export async function checkAlarms(): Promise<number> {
     if (o.state && o.state !== "working") {
       await fire(o.id, "offline", `🔴 <b>ONU Offline</b>: ${who} — OLT ${olt}`);
     } else if (o.state === "working") {
-      clear(o.id, "offline");
+      await clear(o.id, "offline");
     }
 
     // Weak signal
@@ -46,7 +56,7 @@ export async function checkAlarms(): Promise<number> {
     if (rx !== null && rx < SIGNAL_ALARM_DBM) {
       await fire(o.id, "signal", `🟠 <b>Sinjal i dobët</b>: ${who} — ${rx} dBm (OLT ${olt})`);
     } else if (rx !== null) {
-      clear(o.id, "signal");
+      await clear(o.id, "signal");
     }
 
     // Expiry within 7 days
@@ -56,7 +66,7 @@ export async function checkAlarms(): Promise<number> {
         const when = days < 0 ? `skadoi ${-days} ditë më parë` : `skadon pas ${days} ditë`;
         await fire(o.id, "expiry", `🟡 <b>Skadencë</b>: ${who} — ${when} (OLT ${olt})`);
       } else {
-        clear(o.id, "expiry");
+        await clear(o.id, "expiry");
       }
     }
   }

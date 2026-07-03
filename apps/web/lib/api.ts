@@ -51,6 +51,9 @@ export const api = {
       total: number;
       online: number;
       offline: number;
+      pwrFail: number;
+      los: number;
+      naOffline: number;
       criticalSignal: number;
       warningSignal: number;
       expiring: { id: number; name: string | null; ponPort: string; expiration: string | null; pppoeUser: string | null }[];

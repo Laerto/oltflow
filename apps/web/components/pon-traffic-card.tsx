@@ -101,7 +101,8 @@ export function PonTrafficCard({ oltId }: { oltId: number }) {
                   />
                   <YAxis fontSize={10} stroke="var(--color-muted-foreground)" unit="M" width={44} />
                   <Tooltip
-                    contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                    contentStyle={{ fontSize: 11, borderRadius: 8, backgroundColor: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-foreground)', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' }}
+                    itemStyle={{ color: 'var(--color-foreground)' }}
                     labelFormatter={(t) => new Date(t as number).toLocaleTimeString("sq-AL")}
                     formatter={(v: number, name) => [`${v} Mbps`, name === "down" ? "Download" : "Upload"]}
                   />

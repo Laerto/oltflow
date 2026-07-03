@@ -41,6 +41,9 @@ interface Stats {
   total: number;
   online: number;
   offline: number;
+  pwrFail: number;
+  los: number;
+  naOffline: number;
   criticalSignal: number;
   warningSignal: number;
   expiring: ExpiringClient[];
@@ -174,10 +177,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard href="/unconfigured" icon={Plug} label="Waiting authorization" value={waiting} gradient="from-blue-600 to-blue-800" />
-        <StatCard href="/onus?filter=online" icon={Wifi} label="Online" value={stats?.online ?? "–"} sub={`Total: ${stats?.total ?? 0}`} gradient="from-emerald-600 to-emerald-800" />
-        <StatCard href="/onus?filter=offline" icon={WifiOff} label="Offline" value={stats?.offline ?? "–"} gradient="from-slate-700 to-slate-900" />
-        <StatCard href="/onus?filter=low-signal" icon={SignalHigh} label="Low signals" value={(stats?.warningSignal ?? 0) + (stats?.criticalSignal ?? 0)} sub={`Warn: ${stats?.warningSignal ?? 0} · Crit: ${stats?.criticalSignal ?? 0}`} gradient="from-amber-600 to-amber-800" />
+        <StatCard href="/unconfigured" icon={Plug} label="Waiting authorization" value={waiting} footer={[{ label: "New", value: waiting }]} gradient="from-blue-600 to-blue-800" />
+        <StatCard href="/onus?filter=online" icon={Wifi} label="Online" value={stats?.online ?? "–"} footer={[{ label: "Total authorized", value: stats?.total ?? 0 }]} gradient="from-emerald-600 to-emerald-800" />
+        <StatCard href="/onus?filter=offline" icon={WifiOff} label="Total offline" value={stats?.offline ?? "–"} footer={[{ label: "PwrFail", value: stats?.pwrFail ?? 0 }, { label: "LoS", value: stats?.los ?? 0 }, { label: "N/A", value: stats?.naOffline ?? 0 }]} gradient="from-slate-700 to-slate-900" />
+        <StatCard href="/onus?filter=low-signal" icon={SignalHigh} label="Low signals" value={(stats?.warningSignal ?? 0) + (stats?.criticalSignal ?? 0)} footer={[{ label: "Warning", value: stats?.warningSignal ?? 0 }, { label: "Critical", value: stats?.criticalSignal ?? 0 }]} gradient="from-amber-600 to-amber-800" />
       </div>
 
       <div className="mb-5 grid gap-4 lg:grid-cols-[1fr_360px]">

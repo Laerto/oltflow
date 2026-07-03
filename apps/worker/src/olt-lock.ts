@@ -1,7 +1,4 @@
-import { Redis } from "ioredis";
-
-const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
-const redis = new Redis(REDIS_URL, { maxRetriesPerRequest: null });
+import { kv as redis } from "./kv.js";
 
 export class OltBusyError extends Error {
   constructor(oltId: number) {

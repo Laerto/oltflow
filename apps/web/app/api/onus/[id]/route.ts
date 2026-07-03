@@ -55,7 +55,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 // Sets the management IP (Mikrotik behind a bridge ONU) used by the Winbox launcher.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as { mgmtIp?: unknown };
   const raw = typeof body.mgmtIp === "string" ? body.mgmtIp.trim() : "";
@@ -63,7 +63,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (raw && !ipOk.test(raw)) {
     return NextResponse.json({ error: "IP jo e vlefshme" }, { status: 400 });
   }
-  await prisma.onu.update({ where: { id: Number(id) }, data: { mgmtIp: raw || null } });
+  const onu = await prisma.onu.update({ where: { id: Number(id) }, data: { mgmtIp: raw || null } });
+  await prisma.auditLog
+    .create({
+      data: {
+        action: "set_mgmt_ip",
+        oltId: onu.oltId,
+        ponPort: onu.ponPort,
+        result: "success",
+        userId: Number(user.sub),
+        payload: { mgmtIp: raw || null },
+      },
+    })
+    .catch(() => {});
   return NextResponse.json({ ok: true, mgmtIp: raw || null });
 }
 

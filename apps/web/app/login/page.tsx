@@ -37,7 +37,10 @@ function LoginForm() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Gabim");
-      router.push(searchParams.get("next") || "/");
+      // Only follow same-app paths — a full URL or protocol-relative "//host" in ?next
+      // would let a crafted login link bounce the user to an external site.
+      const next = searchParams.get("next") ?? "/";
+      router.push(next.startsWith("/") && !next.startsWith("//") ? next : "/");
       router.refresh();
     } catch (err) {
       setError((err as Error).message);

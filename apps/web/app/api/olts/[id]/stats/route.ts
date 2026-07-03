@@ -13,9 +13,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   // Anyone expired long ago (months/years) has left the network — exclude them.
   const graceStart = new Date(now - 14 * 24 * 60 * 60 * 1000);
 
-  const [total, online, recentSignals, expiringList] = await Promise.all([
-    prisma.onu.count({ where: { oltId } }),
-    prisma.onu.count({ where: { oltId, state: "working" } }),
+  const [stateGroups, recentSignals, expiringList] = await Promise.all([
+    // One grouped pass over [oltId, state] (indexed) gives total, online, and the
+    // offline-reason split shown on the dashboard cards. State strings come straight
+    // from the OLT and vary in case (e.g. "OffLine" vs "Offline"), so compare lower-cased.
+    prisma.onu.groupBy({ by: ["state"], where: { oltId }, _count: { _all: true } }),
     // Both signal levels in one pass; distinct per ONU so an ONU logging several rows in
     // the window is counted once. Served by the new [signalLevel, recordedAt] index.
     prisma.signal.findMany({
@@ -37,10 +39,29 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }),
   ]);
 
+  // Roll the grouped state counts into the fleet totals + offline-reason breakdown.
+  // PwrFail = power off / dying gasp, LoS = loss of signal, N/A = any other offline state.
+  let total = 0;
+  let online = 0;
+  let pwrFail = 0;
+  let los = 0;
+  for (const g of stateGroups) {
+    const n = g._count._all;
+    total += n;
+    const s = (g.state ?? "").toLowerCase();
+    if (s === "working") online += n;
+    else if (s === "power off" || s === "poweroff" || s === "dyinggasp") pwrFail += n;
+    else if (s === "los") los += n;
+  }
+  const offline = total - online;
+
   return NextResponse.json({
     total,
     online,
-    offline: total - online,
+    offline,
+    pwrFail,
+    los,
+    naOffline: offline - pwrFail - los,
     criticalSignal: recentSignals.filter((s) => s.signalLevel === "critical").length,
     warningSignal: recentSignals.filter((s) => s.signalLevel === "warning").length,
     expiring: expiringList.map((o) => ({

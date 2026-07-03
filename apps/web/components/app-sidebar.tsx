@@ -49,14 +49,17 @@ export function AppSidebar({
   }, [loadWaiting]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-14 items-center gap-2 px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+    <div className="flex h-full flex-col bg-sidebar border-r border-border/50 shadow-sm">
+      <div className="flex h-16 items-center gap-3 px-4 border-b border-border/50 bg-card/40">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
           <Server className="h-5 w-5" />
         </div>
-        <span className="text-lg font-extrabold tracking-tight">
-          <span className="text-primary">OLT</span>Flow
-        </span>
+        <div className="flex flex-col">
+          <span className="text-lg font-extrabold tracking-tight leading-tight">
+            <span className="text-primary">OLT</span>Flow
+          </span>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/80">Enterprise NOC</span>
+        </div>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
         {NAV.filter((item) => rank >= item.minTier).map((item) => {
@@ -67,10 +70,10 @@ export function AppSidebar({
               key={item.href}
               href={item.href}
               onClick={onNavigate}
-              className={`flex items-center gap-3 rounded-lg border-l-[3px] px-3 py-2 text-sm font-medium transition ${
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 ${
                 active
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground hover:translate-x-1"
               }`}
             >
               <item.icon className="h-4 w-4" />
