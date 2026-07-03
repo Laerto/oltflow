@@ -20,8 +20,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SignalPill } from "@/components/signal-pill";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
-import { useOlts } from "../providers";
+import { useOlts, useMe } from "../providers";
 import { api, type OnuRow } from "@/lib/api";
+import { can } from "@/lib/permissions";
 import { formatPonPort, isEponPort, onuConnectionKind } from "@oltflow/core";
 import { PppoeModal } from "@/components/pppoe-modal";
 import { DeleteOnuDialog } from "@/components/delete-onu-dialog";
@@ -162,6 +163,9 @@ export default function OnusPage() {
 
 function OnusContent() {
   const { currentOlt } = useOlts();
+  const me = useMe();
+  const operate = can.operate(me?.role);
+  const admin = can.admin(me?.role);
   const searchParams = useSearchParams();
   const urlFilter = searchParams.get("filter");
   const urlSignal = searchParams.get("signal");
@@ -409,7 +413,7 @@ function OnusContent() {
                       <Eye className="mr-1 h-4 w-4" /> View
                     </Link>
                   </Button>
-                  {!isEponPort(o.ponPort) ? (
+                  {operate && !isEponPort(o.ponPort) ? (
                     <Button size="sm" variant="secondary" onClick={() => setPppoeTarget(o.ponPort)}>
                       <Lock className="mr-1 h-4 w-4" /> PPPoE
                     </Button>
@@ -427,12 +431,14 @@ function OnusContent() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-10">
-                    <input
-                      type="checkbox"
-                      className="h-3.5 w-3.5 accent-primary"
-                      checked={filtered.length > 0 && filtered.every((o) => selected.has(o.id))}
-                      onChange={(e) => setSelected(e.target.checked ? new Set(filtered.map((o) => o.id)) : new Set())}
-                    />
+                    {operate && (
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-primary"
+                        checked={filtered.length > 0 && filtered.every((o) => selected.has(o.id))}
+                        onChange={(e) => setSelected(e.target.checked ? new Set(filtered.map((o) => o.id)) : new Set())}
+                      />
+                    )}
                   </TableHead>
                   <TableHead className="w-24 text-[10px] uppercase">Status</TableHead>
                   <TableHead className="w-36 text-[10px] uppercase">Serial</TableHead>
@@ -465,12 +471,14 @@ function OnusContent() {
                   return (
                     <TableRow key={o.id} className={`${rowPad} ${selected.has(o.id) ? "bg-primary/5" : i % 2 ? "bg-muted/60" : ""}`}>
                       <TableCell>
-                        <input
-                          type="checkbox"
-                          className="h-3.5 w-3.5 accent-primary"
-                          checked={selected.has(o.id)}
-                          onChange={() => toggle(o.id)}
-                        />
+                        {operate && (
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 accent-primary"
+                            checked={selected.has(o.id)}
+                            onChange={() => toggle(o.id)}
+                          />
+                        )}
                       </TableCell>
                       <TableCell className="border-l-[3px]" style={{ borderLeftColor: borderColor }}>
                         <StatusBadge state={o.state} />
@@ -519,28 +527,30 @@ function OnusContent() {
                               <Eye className="mr-1 h-3.5 w-3.5" /> View
                             </Link>
                           </Button>
-                          {!isEponPort(o.ponPort) && (
+                          {operate && !isEponPort(o.ponPort) && (
                             <Button variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Ndrysho PPPoE" onClick={() => setPppoeTarget(o.ponPort)}>
                               <Lock className="h-4 w-4" />
                             </Button>
                           )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Më shumë">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => restartOne(o)}>
-                                <RotateCw className="h-4 w-4" /> Riniso ONU
-                              </DropdownMenuItem>
-                              {!isEponPort(o.ponPort) && (
-                                <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(o)}>
-                                  <Trash2 className="h-4 w-4" /> Fshi ONU
+                          {operate && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Më shumë">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => restartOne(o)}>
+                                  <RotateCw className="h-4 w-4" /> Riniso ONU
                                 </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                {admin && !isEponPort(o.ponPort) && (
+                                  <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(o)}>
+                                    <Trash2 className="h-4 w-4" /> Fshi ONU
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

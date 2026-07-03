@@ -7,7 +7,13 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });
+  // Session expired / not logged in — bounce to login (middleware also guards navigations).
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+    throw new ApiError("Sesioni skadoi — hyr përsëri");
+  }
   const data = await res.json().catch(() => ({}));
+  if (res.status === 403) throw new ApiError(data.error === "FORBIDDEN" ? "Nuk keni leje për këtë veprim" : data.error ?? "E ndaluar");
   if (!res.ok) throw new ApiError(data.error ?? `Gabim (${res.status})`);
   return data as T;
 }
@@ -88,9 +94,30 @@ export const api = {
     request<{ id: string; type: string; status: string; error: string | null; output: unknown }>(`/api/jobs/${id}`),
   audit: (oltId?: number) => request<{ logs: AuditEntry[] }>(`/api/audit${oltId ? `?oltId=${oltId}` : ""}`),
   logout: () => request<{ ok: boolean }>("/api/logout", { method: "POST" }),
+  me: () => request<Me>("/api/me"),
+  listUsers: () => request<{ users: UserRow[] }>("/api/users"),
+  createUser: (input: { email: string; name?: string; password: string; role: string }) =>
+    request<{ user: UserRow }>("/api/users", { method: "POST", body: JSON.stringify(input) }),
+  updateUser: (id: number, input: { name?: string; role?: string; password?: string }) =>
+    request<{ user: UserRow }>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  deleteUser: (id: number) => request<{ ok: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
   ping: (ip: string) =>
     request<{ alive: boolean; avgMs: number | null; loss: number }>(`/api/ping?ip=${encodeURIComponent(ip)}`),
 };
+
+export interface Me {
+  id: number;
+  email: string;
+  name: string | null;
+  role: string;
+}
+export interface UserRow {
+  id: number;
+  email: string;
+  name: string | null;
+  role: string;
+  createdAt: string;
+}
 
 export interface OltPort {
   port: number;

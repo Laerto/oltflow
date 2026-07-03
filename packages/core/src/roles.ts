@@ -1,0 +1,56 @@
+import { z } from "zod";
+
+/** The three access tiers. Higher rank ⊇ every lower rank's abilities.
+ * - viewer  (1): read-only — see everything, change nothing.
+ * - support (2): day-to-day ops — authorize ONU, PPPoE/VLAN, WiFi, reboot, WAN access.
+ * - admin   (3): everything — OLT/ONU delete, users, ACS, billing, audit.
+ * "operator" is the legacy default and is treated as support. */
+export const ROLES = ["admin", "support", "viewer"] as const;
+export type Role = (typeof ROLES)[number];
+
+export const ROLE_RANK: Record<string, number> = {
+  admin: 3,
+  support: 2,
+  operator: 2, // legacy alias for support
+  viewer: 1,
+};
+
+/** Authenticated but unknown role ⇒ least privilege (read-only). */
+export function roleRank(role: string | null | undefined): number {
+  return (role && ROLE_RANK[role]) || 1;
+}
+
+/** Access tiers used across the authorization matrix (middleware + routes). */
+export const TIER = { VIEW: 1, OPERATE: 2, ADMIN: 3 } as const;
+export type Tier = (typeof TIER)[keyof typeof TIER];
+
+export function hasTier(role: string | null | undefined, tier: Tier): boolean {
+  return roleRank(role) >= tier;
+}
+
+// Human labels for the UI.
+export const ROLE_LABELS: Record<Role, string> = {
+  admin: "Admin (i plotë)",
+  support: "Support (operacione)",
+  viewer: "Vetëm shikim",
+};
+
+export const userCreateSchema = z.object({
+  email: z.string().email(),
+  name: z.string().trim().min(1).max(80).optional(),
+  password: z.string().min(6).max(200),
+  role: z.enum(ROLES),
+});
+
+export const userUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    role: z.enum(ROLES).optional(),
+    password: z.string().min(6).max(200).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.role !== undefined || v.password !== undefined, {
+    message: "Asgjë për të ndryshuar",
+  });
+
+export type UserCreateInput = z.infer<typeof userCreateSchema>;
+export type UserUpdateInput = z.infer<typeof userUpdateSchema>;

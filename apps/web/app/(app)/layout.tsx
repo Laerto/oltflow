@@ -1,10 +1,12 @@
-import { OltProvider } from "./providers";
+import { OltProvider, SessionProvider } from "./providers";
 import { Shell } from "@/components/shell";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <OltProvider>
-      <Shell>{children}</Shell>
-    </OltProvider>
+    <SessionProvider>
+      <OltProvider>
+        <Shell>{children}</Shell>
+      </OltProvider>
+    </SessionProvider>
   );
 }

@@ -3,8 +3,9 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Server, Plus } from "lucide-react";
-import { useOlts } from "@/app/(app)/providers";
+import { useOlts, useMe } from "@/app/(app)/providers";
 import { api, ApiError, pollJob } from "@/lib/api";
+import { can } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,6 +32,7 @@ import { OltSelector } from "./olt-selector";
 export function Shell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { olts, currentOlt, setCurrentOltId, refresh } = useOlts();
+  const me = useMe();
   const [addOpen, setAddOpen] = useState(false);
 
   async function logout() {
@@ -52,9 +54,11 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             <OltSelector olts={olts} current={currentOlt} onChange={setCurrentOltId} />
-            <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="mr-1 h-4 w-4" /> Shto OLT
-            </Button>
+            {can.admin(me?.role) && (
+              <Button size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="mr-1 h-4 w-4" /> Shto OLT
+              </Button>
+            )}
           </div>
         </header>
         <main className="flex-1 p-4 lg:p-6">{children}</main>

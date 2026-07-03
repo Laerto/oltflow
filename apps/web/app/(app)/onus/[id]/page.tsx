@@ -28,6 +28,8 @@ import { WifiModal } from "@/components/wifi-modal";
 import { ReplaceOnuModal } from "@/components/replace-onu-modal";
 import { PingButton } from "@/components/ping-button";
 import { OnuLivePanel } from "@/components/onu-live-panel";
+import { useMe } from "@/app/(app)/providers";
+import { can } from "@/lib/permissions";
 import { isEponPort, onuConnectionKind } from "@oltflow/core";
 
 type OnuDetail = OnuRow & { oltId: number; oltName: string };
@@ -41,6 +43,9 @@ export default function OnuDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const onuId = Number(params.id);
+  const me = useMe();
+  const operate = can.operate(me?.role);
+  const admin = can.admin(me?.role);
 
   const [onu, setOnu] = useState<OnuDetail | null>(null);
   const [live, setLive] = useState<LiveExtras | null>(null);
@@ -160,18 +165,26 @@ export default function OnuDetailPage() {
           <Button variant="secondary" onClick={doRefresh} disabled={refreshing || epon} title={epon ? "Rifreskimi CLI nuk është ende i implementuar për EPON" : undefined}>
             {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Rifresko nga OLT
           </Button>
-          <Button variant="default" onClick={() => setPppoeOpen(true)} disabled={epon} title={epon ? "PPPoE nuk është i mbështetur për EPON ende" : undefined}>
-            <Lock className="h-4 w-4" /> Ndrysho PPPoE
-          </Button>
-          <Button variant="secondary" onClick={() => setReplaceOpen(true)} disabled={epon} title={epon ? "Zëvendësimi nuk është i mbështetur për EPON ende" : undefined}>
-            <RefreshCw className="h-4 w-4" /> Zëvendëso ONU
-          </Button>
-          <Button variant="secondary" onClick={doWanAccess} disabled={wanBusy || epon} title={epon ? "Nuk mbështetet për EPON" : "Hap aksesin WAN te paneli i ONU-së"}>
-            {wanBusy ? <Spinner /> : <Globe className="h-4 w-4" />} Akses WAN
-          </Button>
-          <Button variant="destructive" onClick={doReboot} disabled={rebooting || !wifi?.deviceId} title={!wifi?.deviceId ? "Nuk ka TR-069 për këtë ONU" : undefined}>
-            {rebooting ? <Spinner /> : <Power className="h-4 w-4" />} Riniso ONU
-          </Button>
+          {operate && (
+            <Button variant="default" onClick={() => setPppoeOpen(true)} disabled={epon} title={epon ? "PPPoE nuk është i mbështetur për EPON ende" : undefined}>
+              <Lock className="h-4 w-4" /> Ndrysho PPPoE
+            </Button>
+          )}
+          {admin && (
+            <Button variant="secondary" onClick={() => setReplaceOpen(true)} disabled={epon} title={epon ? "Zëvendësimi nuk është i mbështetur për EPON ende" : undefined}>
+              <RefreshCw className="h-4 w-4" /> Zëvendëso ONU
+            </Button>
+          )}
+          {operate && (
+            <Button variant="secondary" onClick={doWanAccess} disabled={wanBusy || epon} title={epon ? "Nuk mbështetet për EPON" : "Hap aksesin WAN te paneli i ONU-së"}>
+              {wanBusy ? <Spinner /> : <Globe className="h-4 w-4" />} Akses WAN
+            </Button>
+          )}
+          {operate && (
+            <Button variant="destructive" onClick={doReboot} disabled={rebooting || !wifi?.deviceId} title={!wifi?.deviceId ? "Nuk ka TR-069 për këtë ONU" : undefined}>
+              {rebooting ? <Spinner /> : <Power className="h-4 w-4" />} Riniso ONU
+            </Button>
+          )}
         </div>
       </div>
 
@@ -225,7 +238,7 @@ export default function OnuDetailPage() {
 
           <SectionCard
             title={<><Lock className="inline h-4 w-4" /> WAN / PPPoE</>}
-            action={!epon ? <Button variant="default" className="px-2 py-1 text-[11px]" onClick={() => setPppoeOpen(true)}><Pencil className="h-3 w-3" /> Ndrysho</Button> : undefined}
+            action={operate && !epon ? <Button variant="default" className="px-2 py-1 text-[11px]" onClick={() => setPppoeOpen(true)}><Pencil className="h-3 w-3" /> Ndrysho</Button> : undefined}
           >
             <div className="px-4">
               <InfoRow

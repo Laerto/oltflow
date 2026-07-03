@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, type OltSummary } from "@/lib/api";
+import { api, type OltSummary, type Me } from "@/lib/api";
 
 interface OltContextValue {
   olts: OltSummary[];
@@ -59,4 +59,30 @@ export function useOlts() {
   const ctx = useContext(OltContext);
   if (!ctx) throw new Error("useOlts must be used within OltProvider");
   return ctx;
+}
+
+// ── Current user / role ──────────────────────────────────────────────────────
+const SessionContext = createContext<{ me: Me | null; loading: boolean }>({ me: null, loading: true });
+
+export function SessionProvider({ children }: { children: ReactNode }) {
+  const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .me()
+      .then((m) => alive && setMe(m))
+      .catch(() => {})
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return <SessionContext.Provider value={{ me, loading }}>{children}</SessionContext.Provider>;
+}
+
+export function useMe(): Me | null {
+  return useContext(SessionContext).me;
 }

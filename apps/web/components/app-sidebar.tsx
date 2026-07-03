@@ -3,16 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Router, Plug, Settings2, Server, LogOut } from "lucide-react";
-import { useOlts } from "@/app/(app)/providers";
+import { LayoutDashboard, Router, Plug, Settings2, Server, LogOut, Users, ShieldCheck } from "lucide-react";
+import { useOlts, useMe } from "@/app/(app)/providers";
 import { api } from "@/lib/api";
+import { roleRank, ROLE_LABELS, type Role } from "@/lib/permissions";
 
+// minTier: 1=view (all), 2=operate (support+admin), 3=admin. Items above the user's tier are hidden.
 const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/onus", label: "ONU-të", icon: Router },
-  { href: "/unconfigured", label: "Unconfigured", icon: Plug },
-  { href: "/provision", label: "Provizionim", icon: Settings2 },
-  { href: "/olts", label: "OLT-et", icon: Server },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, minTier: 1 },
+  { href: "/onus", label: "ONU-të", icon: Router, minTier: 1 },
+  { href: "/unconfigured", label: "Unconfigured", icon: Plug, minTier: 1 },
+  { href: "/provision", label: "Provizionim", icon: Settings2, minTier: 2 },
+  { href: "/olts", label: "OLT-et", icon: Server, minTier: 1 },
+  { href: "/users", label: "Përdoruesit", icon: Users, minTier: 3 },
 ];
 
 export function AppSidebar({
@@ -24,6 +27,8 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const { currentOlt } = useOlts();
+  const me = useMe();
+  const rank = roleRank(me?.role);
   const [waiting, setWaiting] = useState(0);
 
   const loadWaiting = useCallback(async () => {
@@ -54,7 +59,7 @@ export function AppSidebar({
         </span>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {NAV.map((item) => {
+        {NAV.filter((item) => rank >= item.minTier).map((item) => {
           const active = pathname === item.href;
           const badge = item.href === "/unconfigured" && waiting > 0 ? waiting : null;
           return (
@@ -80,6 +85,15 @@ export function AppSidebar({
         })}
       </nav>
       <div className="border-t border-border p-3">
+        {me && (
+          <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <div className="min-w-0">
+              <div className="truncate text-xs font-medium text-foreground">{me.name || me.email}</div>
+              <div className="text-[10px] text-muted-foreground">{ROLE_LABELS[me.role as Role] ?? me.role}</div>
+            </div>
+          </div>
+        )}
         <button
           onClick={onLogout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
