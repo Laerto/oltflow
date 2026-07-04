@@ -1,5 +1,5 @@
 import { prisma } from "@oltflow/db";
-import { scanOltState, scanOltEponState, scanOltInventory, scanEponInventory, scanUnconfigured } from "@oltflow/adapters";
+import { scanOltState, scanOltEponState, scanOltInventory, scanEponInventory, scanUnconfigured, scanEponUnauthenticated } from "@oltflow/adapters";
 import { DEFAULT_PORTS_PER_SLOT, DEFAULT_EPON_PORTS_PER_SLOT } from "@oltflow/core";
 import { loadOlt, toCreds } from "../olt-creds.js";
 import { batchUpsertOnus, reconcileUnconfigured } from "../persist.js";
@@ -22,7 +22,10 @@ export async function syncOltInventory(oltId: number): Promise<number> {
         ? await scanOltEponState(creds, olt.eponSlots, DEFAULT_EPON_PORTS_PER_SLOT)
         : [];
       const uncfg = await scanUnconfigured(creds);
-      return { rows: [...gponRows, ...eponRows], uncfg };
+      // EPON boards don't appear in `show gpon onu uncfg`; discover their waiting-auth ONUs
+      // via `show onu unauthentication` and merge into the same list (MAC as serial).
+      const eponUncfg = olt.eponSlots.length ? await scanEponUnauthenticated(creds) : [];
+      return { rows: [...gponRows, ...eponRows], uncfg: [...uncfg, ...eponUncfg] };
     });
 
     await batchUpsertOnus(

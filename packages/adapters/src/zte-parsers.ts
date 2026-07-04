@@ -65,6 +65,45 @@ export function parseUncfg(raw: string): UncfgOnu[] {
   return onus;
 }
 
+/**
+ * Parses ZTE EPON `show onu unauthentication` — waiting-authorization ONUs on EPON boards.
+ * Unlike GPON's tabular `show gpon onu uncfg`, EPON prints a repeated key:value BLOCK per
+ * ONU, each anchored by `Onu Interface : epon-onu_F/S/P:N`:
+ *
+ *   Onu Interface  :  epon-onu_1/2/3:1
+ *   Onu Model      :  ZTE-F661
+ *   MAC Address    :  bcf8.8b45.ebcc
+ *   Online State   :  authentication deny
+ *   RegTime        :  2026/07/04 11:39:48
+ *
+ * EPON ONUs have no GPON-style serial, so the MAC is used as `serial` — this slots the row
+ * into the same UncfgOnu shape / Waiting-Authorization list as GPON. Only `epon-onu_` rows
+ * are kept (the command can echo the prompt/other lines).
+ */
+export function parseEponUnauth(raw: string): UncfgOnu[] {
+  const onus: UncfgOnu[] = [];
+  let cur: Record<string, string> | null = null;
+  const flush = () => {
+    if (cur) {
+      const iface = cur["onu interface"];
+      const mac = cur["mac address"];
+      if (iface && iface.startsWith("epon-onu") && mac) {
+        onus.push({ ponPort: iface, serial: mac, state: cur["online state"] || "unauth" });
+      }
+    }
+    cur = null;
+  };
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const m = /^\s*([A-Za-z][A-Za-z ]+?)\s*:\s*(.*)$/.exec(rawLine);
+    if (!m) continue;
+    const key = m[1].trim().toLowerCase();
+    if (key === "onu interface") flush(); // new block starts
+    (cur ??= {})[key] = m[2].trim();
+  }
+  flush();
+  return onus;
+}
+
 export interface OnuStateRow {
   ponPort: string;
   state: string;

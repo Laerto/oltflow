@@ -16,7 +16,11 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { useOlts } from "../providers";
 import { api, type UncfgOnu } from "@/lib/api";
+import { formatPonPort, isEponPort } from "@oltflow/core";
 import { ProvisionModal } from "@/components/provision-modal";
+
+const EPON_BADGE = "border-violet-500/30 bg-violet-500/10 text-violet-600";
+const EPON_HINT = "ONU EPON — autorizohet nga CLI e OLT-së (paneli s'ka ende rrugë shkrimi për EPON)";
 
 export default function UnconfiguredPage() {
   const { currentOlt, allOlts } = useOlts();
@@ -72,13 +76,20 @@ export default function UnconfiguredPage() {
             {onus.map((o) => (
               <div key={o.ponPort} className="rounded-lg border p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-sm">{o.serial}</span>
+                  <span className="flex items-center gap-1.5 font-mono text-sm">
+                    {o.serial}
+                    {isEponPort(o.ponPort) && <Badge variant="outline" className={EPON_BADGE}>EPON</Badge>}
+                  </span>
                   <Badge variant="secondary">{o.state}</Badge>
                 </div>
-                <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">{o.ponPort.replace("gpon-onu_", "")}</div>
-                <Button size="sm" className="mt-3 w-full" onClick={() => setTarget(o)}>
-                  <Zap className="mr-1 h-4 w-4" /> Autorizo
-                </Button>
+                <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">{formatPonPort(o.ponPort)}</div>
+                {isEponPort(o.ponPort) ? (
+                  <div className="mt-3 rounded-md bg-muted px-2 py-2 text-[11px] text-muted-foreground">{EPON_HINT}</div>
+                ) : (
+                  <Button size="sm" className="mt-3 w-full" onClick={() => setTarget(o)}>
+                    <Zap className="mr-1 h-4 w-4" /> Autorizo
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -97,18 +108,26 @@ export default function UnconfiguredPage() {
               <TableBody>
                 {onus.map((o) => (
                   <TableRow key={o.ponPort}>
-                    <TableCell className="font-mono text-xs">{o.serial}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{o.ponPort.replace("gpon-onu_", "")}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <span className="flex items-center gap-1.5">
+                        {o.serial}
+                        {isEponPort(o.ponPort) && <Badge variant="outline" className={EPON_BADGE}>EPON</Badge>}
+                      </span>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{formatPonPort(o.ponPort)}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{o.state}</Badge>
                     </TableCell>
                     <TableCell>
-                      {/* Only "Autorizo" here — an unconfigured ONU has no pon-onu-mng
-                          context yet, so standalone PPPoE always fails. The provision
-                          modal offers "Autorizo + PPPoE" to set both in one pass. */}
-                      <Button size="sm" className="h-7 px-2 text-[11px]" onClick={() => setTarget(o)}>
-                        <Zap className="mr-1 h-3.5 w-3.5" /> Autorizo
-                      </Button>
+                      {/* GPON: "Autorizo" opens the provision modal (Autorizo + PPPoE in one
+                          pass). EPON has no write-path yet → authorize on the OLT CLI. */}
+                      {isEponPort(o.ponPort) ? (
+                        <span className="text-[11px] text-muted-foreground" title={EPON_HINT}>Autorizo në CLI</span>
+                      ) : (
+                        <Button size="sm" className="h-7 px-2 text-[11px]" onClick={() => setTarget(o)}>
+                          <Zap className="mr-1 h-3.5 w-3.5" /> Autorizo
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

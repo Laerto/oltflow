@@ -2,6 +2,7 @@ import type { CliSession } from "./cli-session.js";
 import { connectSession } from "./session-factory.js";
 import {
   parseUncfg,
+  parseEponUnauth,
   parseOnuState,
   parseEponOnuState,
   parseOnuDetail,
@@ -120,6 +121,25 @@ export async function scanUnconfigured(creds: OltCreds): Promise<UncfgOnu[]> {
   try {
     const out = await session.sendCommand("show gpon onu uncfg", 2000);
     return parseUncfg(out);
+  } finally {
+    session.close();
+  }
+}
+
+/**
+ * EPON waiting-authorization discovery: `show onu unauthentication` (NOTE: the command is
+ * `show onu ...`, NOT `show epon onu ...` — the latter is "% Unrecognized command" on ZTE
+ * EPON). Returns unauthenticated EPON ONUs (MAC as serial) in the same UncfgOnu shape as
+ * the GPON `uncfg` scan so they land in the same Waiting-Authorization list. Read-only:
+ * EPON has no authorize write-path yet, so the UI sends these to a CLI hint rather than the
+ * GPON provision flow. Tolerant of an OLT that doesn't know the command (returns []).
+ */
+export async function scanEponUnauthenticated(creds: OltCreds): Promise<UncfgOnu[]> {
+  const session = await login(creds);
+  try {
+    const out = await session.sendCommand("show onu unauthentication", 2000);
+    if (/unrecognized command|invalid input/i.test(out)) return [];
+    return parseEponUnauth(out);
   } finally {
     session.close();
   }
