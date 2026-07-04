@@ -102,10 +102,11 @@ export const api = {
   logout: () => request<{ ok: boolean }>("/api/logout", { method: "POST" }),
   me: () => request<Me>("/api/me"),
   listUsers: () => request<{ users: UserRow[] }>("/api/users"),
-  createUser: (input: { email: string; name?: string; password: string; role: string; oltIds?: number[] }) =>
+  createUser: (input: { email: string; name?: string; password: string; role: string; oltIds?: number[]; telegramChatId?: string }) =>
     request<{ user: UserRow }>("/api/users", { method: "POST", body: JSON.stringify(input) }),
-  updateUser: (id: number, input: { name?: string; role?: string; password?: string; oltIds?: number[] }) =>
+  updateUser: (id: number, input: { name?: string; role?: string; password?: string; oltIds?: number[]; telegramChatId?: string }) =>
     request<{ user: UserRow }>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  listTechnicians: () => request<{ technicians: { id: number; name: string | null; email: string }[] }>("/api/technicians"),
   deleteUser: (id: number) => request<{ ok: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
   // ── Tickets (fault repair) ──
   listTickets: (status?: string) => request<{ tickets: TicketRow[] }>(`/api/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`),
@@ -132,6 +133,7 @@ export interface UserRow {
   name: string | null;
   role: string;
   createdAt: string;
+  telegramChatId: string | null;
   olts: { id: number; name: string }[];
 }
 

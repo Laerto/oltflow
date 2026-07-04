@@ -21,6 +21,7 @@ export async function GET() {
       name: true,
       role: true,
       createdAt: true,
+      telegramChatId: true,
       olts: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -50,9 +51,10 @@ export async function POST(request: Request) {
       name: parsed.data.name ?? null,
       passwordH,
       role: parsed.data.role,
+      telegramChatId: parsed.data.telegramChatId || null,
       olts: oltIds.length ? { connect: oltIds.map((id) => ({ id })) } : undefined,
     },
-    select: { id: true, email: true, name: true, role: true, createdAt: true, olts: { select: { id: true, name: true } } },
+    select: { id: true, email: true, name: true, role: true, createdAt: true, telegramChatId: true, olts: { select: { id: true, name: true } } },
   });
   return NextResponse.json({ user });
 }

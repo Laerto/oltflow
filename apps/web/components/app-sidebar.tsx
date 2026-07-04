@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Router, Plug, Settings2, Server, LogOut, Users, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Router, Plug, Settings2, Server, LogOut, Users, ShieldCheck, Wrench } from "lucide-react";
 import { useOlts, useMe } from "@/app/(app)/providers";
 import { api } from "@/lib/api";
 import { roleRank, ROLE_LABELS, type Role } from "@/lib/permissions";
@@ -12,6 +12,7 @@ import { roleRank, ROLE_LABELS, type Role } from "@/lib/permissions";
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, minTier: 1 },
   { href: "/onus", label: "ONU", icon: Router, minTier: 1 },
+  { href: "/tickets", label: "Defektet", icon: Wrench, minTier: 1 },
   { href: "/unconfigured", label: "Unconfigured", icon: Plug, minTier: 1 },
   { href: "/provision", label: "Provizionim", icon: Settings2, minTier: 2 },
   { href: "/olts", label: "OLT", icon: Server, minTier: 1 },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Users, UserPlus, Trash2, KeyRound, ShieldCheck, Server, Check } from "lucide-react";
+import { Users, UserPlus, Trash2, KeyRound, ShieldCheck, Server, Check, Send } from "lucide-react";
 import { api, ApiError, type UserRow, type OltSummary } from "@/lib/api";
 import { useMe } from "@/app/(app)/providers";
 import { ROLE_LABELS, type Role } from "@/lib/permissions";
@@ -13,10 +13,11 @@ import { Alert } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const ROLES: Role[] = ["admin", "support", "viewer"];
+const ROLES: Role[] = ["admin", "support", "technician", "viewer"];
 const roleBadge: Record<string, string> = {
   admin: "border-rose-500/30 bg-rose-500/10 text-rose-600",
   support: "border-blue-500/30 bg-blue-500/10 text-blue-600",
+  technician: "border-amber-500/30 bg-amber-500/10 text-amber-600",
   viewer: "border-slate-400/30 bg-slate-400/10 text-slate-500",
 };
 
@@ -57,6 +58,7 @@ export default function UsersPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("support");
   const [newOltIds, setNewOltIds] = useState<Set<number>>(new Set());
+  const [newTelegram, setNewTelegram] = useState("");
 
   // Per-user scope editor
   const [scopeUser, setScopeUser] = useState<UserRow | null>(null);
@@ -95,8 +97,9 @@ export default function UsersPage() {
         password,
         role,
         oltIds: role === "admin" ? [] : [...newOltIds],
+        telegramChatId: newTelegram.trim() || undefined,
       });
-      setEmail(""); setName(""); setPassword(""); setRole("support"); setNewOltIds(new Set());
+      setEmail(""); setName(""); setPassword(""); setRole("support"); setNewOltIds(new Set()); setNewTelegram("");
       setMsg({ kind: "ok", text: "Përdoruesi u krijua" });
       await load();
     } catch (e) {
@@ -122,6 +125,18 @@ export default function UsersPage() {
     try {
       await api.updateUser(u.id, { password: pw });
       setMsg({ kind: "ok", text: `Fjalëkalimi i ${u.email} u ndryshua` });
+    } catch (e) {
+      setMsg({ kind: "err", text: e instanceof ApiError ? e.message : "Gabim" });
+    }
+  }
+
+  async function editTelegram(u: UserRow) {
+    const tg = window.prompt(`Telegram chat id për ${u.email} (bosh për ta hequr):`, u.telegramChatId ?? "");
+    if (tg === null) return;
+    try {
+      await api.updateUser(u.id, { telegramChatId: tg.trim() });
+      setMsg({ kind: "ok", text: `Telegram i ${u.email} u ruajt` });
+      await load();
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof ApiError ? e.message : "Gabim" });
     }
@@ -176,6 +191,12 @@ export default function UsersPage() {
               <span className="font-normal text-muted-foreground">— zgjidh zonat; bosh = të gjitha</span>
             </Label>
             <div className="mt-2"><OltPicker olts={olts} selected={newOltIds} onToggle={toggleNewOlt} /></div>
+            {role === "technician" && (
+              <div className="mt-3">
+                <Label className="text-xs">Telegram chat id <span className="font-normal text-muted-foreground">— për njoftimet e tiketave (\"ring\")</span></Label>
+                <Input value={newTelegram} onChange={(e) => setNewTelegram(e.target.value)} placeholder="p.sh. 123456789" className="mt-1 max-w-xs" />
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -229,6 +250,9 @@ export default function UsersPage() {
                     <td className="px-4 py-2 text-[11px] text-muted-foreground">{new Date(u.createdAt).toLocaleDateString("sq-AL")}</td>
                     <td className="px-4 py-2">
                       <div className="flex justify-end gap-1.5">
+                        <Button variant="secondary" className="px-2 py-1 text-[11px]" onClick={() => editTelegram(u)} title={u.telegramChatId ? `Telegram: ${u.telegramChatId}` : "Cakto Telegram chat id (njoftime)"}>
+                          <Send className={`h-3.5 w-3.5 ${u.telegramChatId ? "text-primary" : ""}`} />
+                        </Button>
                         <Button variant="secondary" className="px-2 py-1 text-[11px]" onClick={() => resetPassword(u)} title="Reset password">
                           <KeyRound className="h-3.5 w-3.5" />
                         </Button>

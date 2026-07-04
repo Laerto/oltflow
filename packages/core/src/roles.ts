@@ -49,6 +49,8 @@ export const userCreateSchema = z.object({
   role: z.enum(ROLES),
   // OLTs the user may see/operate. Empty/omitted = all (unrestricted). Ignored for admins.
   oltIds: z.array(z.number().int().positive()).optional(),
+  // Telegram chat id for the ticket "ring" (mainly technicians). Empty string clears it.
+  telegramChatId: z.string().trim().max(64).optional(),
 });
 
 export const userUpdateSchema = z
@@ -57,9 +59,15 @@ export const userUpdateSchema = z
     role: z.enum(ROLES).optional(),
     password: z.string().min(6).max(200).optional(),
     oltIds: z.array(z.number().int().positive()).optional(),
+    telegramChatId: z.string().trim().max(64).optional(),
   })
   .refine(
-    (v) => v.name !== undefined || v.role !== undefined || v.password !== undefined || v.oltIds !== undefined,
+    (v) =>
+      v.name !== undefined ||
+      v.role !== undefined ||
+      v.password !== undefined ||
+      v.oltIds !== undefined ||
+      v.telegramChatId !== undefined,
     { message: "Asgjë për të ndryshuar" }
   );
 

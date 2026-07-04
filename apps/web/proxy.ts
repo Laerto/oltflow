@@ -35,6 +35,7 @@ const RULES: Rule[] = [
   { method: "POST", re: /^\/api\/onus\/\d+\/replace$/, tier: TIER.ADMIN },
   { re: /^\/users(\/|$)/, tier: TIER.ADMIN }, // Users admin page
   // ── OPERATE (support + admin) ────────────────────────────────────────────
+  { method: "GET", re: /^\/api\/technicians$/, tier: TIER.OPERATE }, // technician list for assign
   { method: "POST", re: /^\/api\/tickets$/, tier: TIER.OPERATE }, // open a ticket
   { method: "PATCH", re: /^\/api\/tickets\/\d+$/, tier: TIER.OPERATE }, // (re)assign technician
   // NOTE: GET /api/tickets(/id) + POST /api/tickets/id/action ⇒ VIEW default; the routes do

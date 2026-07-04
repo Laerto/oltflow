@@ -40,6 +40,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (parsed.data.name !== undefined) data.name = parsed.data.name;
   if (parsed.data.role !== undefined) data.role = parsed.data.role;
   if (parsed.data.password !== undefined) data.passwordH = await bcrypt.hash(parsed.data.password, 10);
+  if (parsed.data.telegramChatId !== undefined) data.telegramChatId = parsed.data.telegramChatId || null;
   // `set` replaces the whole assignment. Promoting to admin clears any scope (admins are
   // never restricted); otherwise apply the provided list (empty = unrestricted).
   const effectiveRole = parsed.data.role ?? target.role;
@@ -52,7 +53,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const user = await prisma.user.update({
     where: { id },
     data,
-    select: { id: true, email: true, name: true, role: true, createdAt: true, olts: { select: { id: true, name: true } } },
+    select: { id: true, email: true, name: true, role: true, createdAt: true, telegramChatId: true, olts: { select: { id: true, name: true } } },
   });
   return NextResponse.json({ user });
 }

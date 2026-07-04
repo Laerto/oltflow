@@ -16,6 +16,7 @@ import {
   Satellite,
   Trash2,
   Wifi,
+  Wrench,
 } from "lucide-react";
 import { api, ApiError, pollJob, type OnuRow, type WifiDevice } from "@/lib/api";
 import { stateBadgeColor } from "@/lib/ui-helpers";
@@ -30,6 +31,7 @@ import { ReplaceOnuModal } from "@/components/replace-onu-modal";
 import { DeleteOnuDialog } from "@/components/delete-onu-dialog";
 import { PingButton } from "@/components/ping-button";
 import { OnuLivePanel } from "@/components/onu-live-panel";
+import { TicketModal } from "@/components/ticket-modal";
 import { useMe } from "@/app/(app)/providers";
 import { can } from "@/lib/permissions";
 import { isEponPort, onuConnectionKind, classifySignal } from "@oltflow/core";
@@ -61,6 +63,7 @@ export default function OnuDetailPage() {
   const [rebooting, setRebooting] = useState(false);
   const [wanBusy, setWanBusy] = useState(false);
   const [rebootMsg, setRebootMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [ticketOpen, setTicketOpen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -165,6 +168,11 @@ export default function OnuDetailPage() {
           </div>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 [&>button]:h-auto [&>button]:min-h-9 [&>button]:justify-center [&>button]:text-xs sm:flex sm:w-auto sm:flex-wrap sm:[&>button]:text-sm">
+          {operate && (
+            <Button variant="secondary" onClick={() => setTicketOpen(true)} className="border-amber-500/40 text-amber-600 hover:bg-amber-500/10">
+              <Wrench className="h-4 w-4" /> Hap tiket
+            </Button>
+          )}
           <Button variant="secondary" onClick={doRefresh} disabled={refreshing || epon} title={epon ? "Rifreskimi CLI nuk është ende i implementuar për EPON" : undefined}>
             {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Rifresko nga OLT
           </Button>
@@ -197,6 +205,18 @@ export default function OnuDetailPage() {
       </div>
 
       {rebootMsg && <Alert variant={rebootMsg.kind === "err" ? "destructive" : "default"}>{rebootMsg.text}</Alert>}
+
+      {operate && (classifySignal(onu.onuRx) === "warning" || classifySignal(onu.onuRx) === "critical") && (
+        <div className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-500">
+            <Wrench className="h-4 w-4 shrink-0" />
+            <span>Sinjal i dobët (<b>{onu.onuRx} dBm</b>) — mund të hapësh një tiket riparimi për teknikun.</span>
+          </div>
+          <Button size="sm" className="shrink-0 bg-amber-500 text-white hover:bg-amber-600" onClick={() => setTicketOpen(true)}>
+            <Wrench className="mr-1 h-4 w-4" /> Hap tiket
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title={<><ClipboardList className="inline h-4 w-4" /> Informacioni ONU <Badge variant={stateBadgeColor(onu.state)}>● {onu.state === "working" ? "Online" : "Offline"}</Badge></>}>
@@ -366,6 +386,16 @@ export default function OnuDetailPage() {
           onDone={() => router.push("/onus")}
         />
       )}
+      <TicketModal
+        open={ticketOpen}
+        onClose={() => setTicketOpen(false)}
+        onuId={onu.id}
+        onuName={onu.name}
+        ponPort={onu.ponPort}
+        onuRx={onu.onuRx}
+        canAssign={operate}
+        onCreated={() => setRebootMsg({ kind: "ok", text: "Tiketi u hap." })}
+      />
     </div>
   );
 }
