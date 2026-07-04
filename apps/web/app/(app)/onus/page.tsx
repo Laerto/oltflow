@@ -356,29 +356,24 @@ function OnusContent() {
           inside) so nothing needs horizontal scrolling; flow in a wrapping row on sm+. */}
       <div className="mb-3 flex flex-col items-start gap-2 pb-1 sm:flex-row sm:flex-wrap sm:items-stretch">
         <FilterBox label="Status" color="slate">
-          <Chip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>Të gjitha</Chip>
+          <Chip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>All</Chip>
           <Chip active={statusFilter === "online"} onClick={() => setStatusFilter("online")}>Online</Chip>
           <Chip active={statusFilter === "offline"} onClick={() => setStatusFilter("offline")}>Offline</Chip>
         </FilterBox>
         <FilterBox label="Tipi" color="indigo">
-          <Chip active={brFilter === "all"} onClick={() => setBrFilter("all")}>Të gjitha</Chip>
+          <Chip active={brFilter === "all"} onClick={() => setBrFilter("all")}>All</Chip>
           <Chip active={brFilter === "route"} onClick={() => setBrFilter("route")}>Route</Chip>
           <Chip active={brFilter === "bridge"} onClick={() => setBrFilter("bridge")}>Bridge</Chip>
         </FilterBox>
-        <FilterBox label="Signal" color="amber">
-          <Chip active={signalBand === "all"} onClick={() => setSignalBand("all")}>All</Chip>
-          <SignalChip band="good" active={signalBand === "good"} onClick={() => setSignalBand("good")} icon={SignalHigh} label="Good" />
-          <SignalChip band="warning" active={signalBand === "warning"} onClick={() => setSignalBand("warning")} icon={SignalMedium} label="Warning" />
-          <SignalChip band="critical" active={signalBand === "critical"} onClick={() => setSignalBand("critical")} icon={SignalLow} label="Critical" />
-        </FilterBox>
+        {/* Model sits parallel to Tipi (both describe the ONU model/type). */}
         {models.length > 1 && (
           <FilterBox label="Model" color="blue">
             <Select value={modelFilter} onValueChange={setModelFilter}>
-              <SelectTrigger className="h-7 w-44 text-xs">
-                <SelectValue placeholder="Të gjitha" />
+              <SelectTrigger className="h-7 w-40 text-xs">
+                <SelectValue placeholder="All" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Të gjitha</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 {models.map((m) => (
                   <SelectItem key={m} value={m}>{m}</SelectItem>
                 ))}
@@ -386,6 +381,12 @@ function OnusContent() {
             </Select>
           </FilterBox>
         )}
+        <FilterBox label="Signal" color="amber">
+          <Chip active={signalBand === "all"} onClick={() => setSignalBand("all")}>All</Chip>
+          <SignalChip band="good" active={signalBand === "good"} onClick={() => setSignalBand("good")} icon={SignalHigh} label="Good" />
+          <SignalChip band="warning" active={signalBand === "warning"} onClick={() => setSignalBand("warning")} icon={SignalMedium} label="Warning" />
+          <SignalChip band="critical" active={signalBand === "critical"} onClick={() => setSignalBand("critical")} icon={SignalLow} label="Critical" />
+        </FilterBox>
       </div>
 
       {loading && onus.length === 0 ? (
