@@ -32,7 +32,7 @@ import { PingButton } from "@/components/ping-button";
 import { OnuLivePanel } from "@/components/onu-live-panel";
 import { useMe } from "@/app/(app)/providers";
 import { can } from "@/lib/permissions";
-import { isEponPort, onuConnectionKind } from "@oltflow/core";
+import { isEponPort, onuConnectionKind, classifySignal } from "@oltflow/core";
 
 type OnuDetail = OnuRow & { oltId: number; oltName: string };
 
@@ -164,7 +164,7 @@ export default function OnuDetailPage() {
             {connectionKind === "route" && <> · <Badge variant="secondary">Route</Badge></>}
           </div>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+        <div className="grid w-full grid-cols-2 gap-2 [&>button]:h-auto [&>button]:min-h-9 [&>button]:justify-center [&>button]:text-xs sm:flex sm:w-auto sm:flex-wrap sm:[&>button]:text-sm">
           <Button variant="secondary" onClick={doRefresh} disabled={refreshing || epon} title={epon ? "Rifreskimi CLI nuk është ende i implementuar për EPON" : undefined}>
             {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Rifresko nga OLT
           </Button>
@@ -401,8 +401,8 @@ function SectionCard({
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center border-b border-border/50 py-2 text-[13px] last:border-0">
-      <span className="w-[150px] flex-shrink-0 text-xs text-muted-foreground">{label}</span>
-      <span className="flex-1 font-medium">{value}</span>
+      <span className="w-28 flex-shrink-0 text-xs text-muted-foreground sm:w-[150px]">{label}</span>
+      <span className="min-w-0 flex-1 font-medium">{value}</span>
     </div>
   );
 }
@@ -437,8 +437,6 @@ function InfoRowSm({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function signalColor(rx: number | null): string {
-  if (rx === null) return "text-muted-foreground";
-  if (rx >= -25) return "text-emerald-600";
-  if (rx >= -27) return "text-amber-600";
-  return "text-rose-600";
+  const b = classifySignal(rx);
+  return b === "good" ? "text-emerald-600" : b === "warning" ? "text-amber-600" : b === "critical" ? "text-rose-600" : "text-muted-foreground";
 }

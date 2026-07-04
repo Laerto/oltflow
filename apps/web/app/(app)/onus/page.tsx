@@ -23,7 +23,7 @@ import { EmptyState } from "@/components/empty-state";
 import { useOlts, useMe } from "../providers";
 import { api, type OnuRow } from "@/lib/api";
 import { can } from "@/lib/permissions";
-import { formatPonPort, isEponPort, onuConnectionKind } from "@oltflow/core";
+import { formatPonPort, isEponPort, onuConnectionKind, classifySignal } from "@oltflow/core";
 import { PppoeModal } from "@/components/pppoe-modal";
 import { DeleteOnuDialog } from "@/components/delete-onu-dialog";
 import { PingButton } from "@/components/ping-button";
@@ -33,12 +33,11 @@ type StatusFilter = "all" | "online" | "offline";
 type BrFilter = "all" | "route" | "bridge";
 type SignalBand = "all" | "good" | "warning" | "critical";
 
-/** Optical signal band per thresholds: good ≥ -23, warning -25..-23, critical < -25. */
-function signalBandOf(rx: number | null | undefined): SignalBand | null {
-  if (rx === null || rx === undefined) return null;
-  if (rx >= -23) return "good";
-  if (rx >= -25) return "warning";
-  return "critical";
+/** Single-source optical bands (good ≥ -25, warning -27..-25, critical < -27) from
+ * @oltflow/core — same thresholds the worker uses to store signalLevel and fire alarms. */
+function isLowSignal(rx: number | null | undefined): boolean {
+  const b = classifySignal(rx);
+  return b === "warning" || b === "critical";
 }
 
 /** Renders the RADIUS expiry date colored by urgency: red = expired, amber ≤ 7 days, else muted. */
@@ -263,11 +262,11 @@ function OnusContent() {
 
   const base = onus
     .filter((o) => statusFilter === "all" || (statusFilter === "online" ? o.state === "working" : o.state !== "working"))
-    .filter((o) => urlFilter !== "low-signal" || (o.onuRx !== null && o.onuRx !== undefined && o.onuRx < -25))
+    .filter((o) => urlFilter !== "low-signal" || isLowSignal(o.onuRx))
     .filter((o) => brFilter === "all" || onuConnectionKind(o.type) === brFilter)
     .filter((o) => modelFilter === "all" || o.type === modelFilter)
     // Optical signal band filter: good / warning / critical (near LOSS).
-    .filter((o) => signalBand === "all" || signalBandOf(o.onuRx) === signalBand)
+    .filter((o) => signalBand === "all" || classifySignal(o.onuRx) === signalBand)
     .filter((o) => `${o.ponPort}${o.serial ?? ""}${o.name ?? ""}${o.type ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
   // Optional sort by expiry (Skadenca header): expired / soonest-to-expire on top; null last.

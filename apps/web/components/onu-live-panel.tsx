@@ -6,6 +6,7 @@ import { Radio, Play, Square, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { api, pollJob, type OnuLiveResult } from "@/lib/api";
+import { classifySignal } from "@oltflow/core";
 
 const POLL_MS = 8000;
 const MAX_POINTS = 40;
@@ -58,8 +59,9 @@ function ponStatus(state: string | null, onuRx: number | null, lastCause?: strin
     const loss = (lastCause ?? "").toLowerCase().includes("los");
     return loss ? { color: "bg-rose-500", label: "LOSS (fibër)" } : { color: "bg-slate-400", label: "Offline" };
   }
-  if (onuRx !== null && onuRx < -25) return { color: "bg-rose-500", label: "Kritik" };
-  if (onuRx !== null && onuRx < -23) return { color: "bg-amber-500", label: "Warning" };
+  const band = classifySignal(onuRx);
+  if (band === "critical") return { color: "bg-rose-500", label: "Kritik" };
+  if (band === "warning") return { color: "bg-amber-500", label: "Warning" };
   return { color: "bg-emerald-500", label: "OK" };
 }
 

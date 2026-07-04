@@ -1,15 +1,17 @@
 "use client";
 
-/** RX signal shown as an ascending 5-segment mini-bar + the dBm value.
- * Color bands: >= -20 good (green), -20..-25 warning (amber), < -25 critical (red). */
+import { classifySignal } from "@oltflow/core";
+
+/** RX signal shown as an ascending 5-segment mini-bar + the dBm value. Bands come from the
+ * single-source thresholds in @oltflow/core (good ≥ -25, warning -27..-25, critical < -27). */
 export function SignalPill({ rx }: { rx: number | null | undefined }) {
   if (rx === null || rx === undefined) {
     return <span className="font-mono text-xs text-muted-foreground">N/A</span>;
   }
-  // Spec thresholds: >= -23 good (green), -23..-25 medium (orange), < -25 weak (red).
+  const band = classifySignal(rx);
   const color =
-    rx >= -23 ? "var(--color-success)" : rx >= -25 ? "var(--color-warning)" : "var(--color-destructive)";
-  const filled = rx >= -23 ? 5 : rx >= -24 ? 4 : rx >= -25 ? 3 : rx >= -27 ? 2 : 1;
+    band === "good" ? "var(--color-success)" : band === "warning" ? "var(--color-warning)" : "var(--color-destructive)";
+  const filled = band === "good" ? (rx >= -22 ? 5 : 4) : band === "warning" ? 3 : rx >= -29 ? 2 : 1;
   return (
     <span className="inline-flex items-center gap-2" title={`${rx} dBm`}>
       <span className="flex items-end gap-0.5">
