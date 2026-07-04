@@ -45,11 +45,22 @@ export async function getWanIpsBySerial(genieacsUrl: string, serials: string[]):
   const wanted = serials.filter(Boolean).map((s) => s.toUpperCase());
   if (!wanted.length) return result;
 
+  // For a handful of serials (the single-ONU detail page passes one) narrow the fetch to
+  // just those devices with an `_id` regex — GenieACS ids embed the serial — instead of
+  // downloading the ENTIRE device tree on every request. That full pull is what made the
+  // ONU detail view spin on open. Above ~40 serials the regex would bloat the request URL,
+  // so the fleet-wide ONU list keeps the single bulk fetch (real scale fix = syncAcs mirror).
+  const query =
+    wanted.length <= 40
+      ? { _id: { $regex: wanted.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") } }
+      : undefined;
+
   // Fetch the WAN subtree AND the ManagementServer connection-request URL — the latter
   // embeds the device's current WAN IP and is present/fresh for every ONU that informs,
   // even when the WANConnection.ExternalIPAddress params aren't populated.
   const res = await fetch(
     devicesUrl(genieacsUrl, {
+      query,
       projection: "_id,InternetGatewayDevice.WANDevice,InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
     })
   );
