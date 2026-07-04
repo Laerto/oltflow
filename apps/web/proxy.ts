@@ -12,7 +12,7 @@ const PUBLIC_PATHS = ["/login", "/api/login", "/api/logout", "/api/health"];
 // Keep in sync with packages/core/src/roles.ts.
 const TIER = { VIEW: 1, OPERATE: 2, ADMIN: 3 } as const;
 type Tier = (typeof TIER)[keyof typeof TIER];
-const ROLE_RANK: Record<string, number> = { admin: 3, support: 2, operator: 2, viewer: 1 };
+const ROLE_RANK: Record<string, number> = { admin: 3, support: 2, operator: 2, technician: 1, viewer: 1 };
 const roleRank = (role: string | null | undefined): number => (role && ROLE_RANK[role]) || 1;
 
 interface Rule {

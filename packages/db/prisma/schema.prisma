@@ -32,6 +32,7 @@ model Olt {
   auditLogs   AuditLog[]
   ponTraffic  PonTraffic[]
   users       User[]    @relation("UserOlts") // support/viewer scoping (empty = all; admin ignores)
+  tickets     Ticket[]
   createdAt   DateTime  @default(now())
 }
 
@@ -73,6 +74,7 @@ model Onu {
   expiration     DateTime? // client account expiry from RADIUS Manager (rm_users), filled by the worker
   lastSeen       DateTime?
   signals        Signal[]
+  tickets        Ticket[]
 
   @@unique([oltId, ponPort])
   @@index([serial])
@@ -119,11 +121,48 @@ model User {
   email     String   @unique
   name      String?
   passwordH String
-  role      String   @default("operator") // admin | operator | viewer
+  role      String   @default("operator") // admin | support | technician | viewer
   /// OLTs this user may see/operate. Empty = all (backward compatible, unrestricted);
   /// admins are never scoped. Assign specific OLTs to restrict support to their zone.
   olts      Olt[]    @relation("UserOlts")
+  /// Telegram chat id for direct ticket notifications (the "ring" to a technician).
+  telegramChatId  String?
+  openedTickets   Ticket[] @relation("TicketOpenedBy")
+  assignedTickets Ticket[] @relation("TicketAssignedTo")
   createdAt DateTime @default(now())
+}
+
+/// Trouble ticket for fault repair: office opens (often from a bad-signal ONU), assigns a
+/// technician (Telegram DM), technician starts→resolves, office verifies with an objective
+/// before/after signal comparison. Timestamps drive the repair-time (MTTR) reporting.
+model Ticket {
+  id             Int      @id @default(autoincrement())
+  onuId          Int
+  onu            Onu      @relation(fields: [onuId], references: [id], onDelete: Cascade)
+  oltId          Int
+  olt            Olt      @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  category       String   // signal_high | offline | pppoe | other
+  severity       String?  // warning | critical | null
+  title          String
+  description    String?
+  status         String   @default("open") // open | assigned | in_progress | resolved | verified | reopened
+  openedById     Int?
+  openedBy       User?    @relation("TicketOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
+  assignedToId   Int?
+  assignedTo     User?    @relation("TicketAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  resolutionNote String?
+  rxAtOpen       Float?   // ONU Rx dBm snapshot when opened (objective before-value)
+  oltRxAtOpen    Float?
+  rxAtVerify     Float?   // ONU Rx dBm at office verification (after-value)
+  openedAt       DateTime @default(now())
+  assignedAt     DateTime?
+  startedAt      DateTime? // repair clock starts
+  resolvedAt     DateTime? // repair clock stops (technician done)
+  verifiedAt     DateTime?
+
+  @@index([oltId, status])
+  @@index([assignedToId, status])
+  @@index([status])
 }
 
 model AuditLog {

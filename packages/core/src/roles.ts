@@ -5,13 +5,14 @@ import { z } from "zod";
  * - support (2): day-to-day ops — authorize ONU, PPPoE/VLAN, WiFi, reboot, WAN access.
  * - admin   (3): everything — OLT/ONU delete, users, ACS, billing, audit.
  * "operator" is the legacy default and is treated as support. */
-export const ROLES = ["admin", "support", "viewer"] as const;
+export const ROLES = ["admin", "support", "technician", "viewer"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_RANK: Record<string, number> = {
   admin: 3,
   support: 2,
   operator: 2, // legacy alias for support
+  technician: 1, // view-tier for general access; ticket work is a separate capability
   viewer: 1,
 };
 
@@ -32,8 +33,14 @@ export function hasTier(role: string | null | undefined, tier: Tier): boolean {
 export const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin (i plotë)",
   support: "Support (operacione)",
+  technician: "Teknik (riparime)",
   viewer: "Vetëm shikim",
 };
+
+/** Ticket-work capability: technicians (their assigned tickets) + office (support/admin). */
+export function canWorkTickets(role: string | null | undefined): boolean {
+  return role === "technician" || roleRank(role) >= 2;
+}
 
 export const userCreateSchema = z.object({
   email: z.string().email(),
