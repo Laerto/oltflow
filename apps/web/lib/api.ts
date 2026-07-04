@@ -107,6 +107,15 @@ export const api = {
   updateUser: (id: number, input: { name?: string; role?: string; password?: string; oltIds?: number[] }) =>
     request<{ user: UserRow }>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   deleteUser: (id: number) => request<{ ok: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
+  // ── Tickets (fault repair) ──
+  listTickets: (status?: string) => request<{ tickets: TicketRow[] }>(`/api/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  getTicket: (id: number) => request<{ ticket: TicketRow }>(`/api/tickets/${id}`),
+  createTicket: (input: { onuId: number; category: string; title: string; description?: string; assignedToId?: number }) =>
+    request<{ ticket: TicketRow }>("/api/tickets", { method: "POST", body: JSON.stringify(input) }),
+  assignTicket: (id: number, assignedToId: number | null) =>
+    request<{ ticket: TicketRow }>(`/api/tickets/${id}`, { method: "PATCH", body: JSON.stringify({ assignedToId }) }),
+  ticketAction: (id: number, action: string, resolutionNote?: string) =>
+    request<{ ticket: TicketRow }>(`/api/tickets/${id}/action`, { method: "POST", body: JSON.stringify({ action, resolutionNote }) }),
   ping: (ip: string) =>
     request<{ alive: boolean; avgMs: number | null; loss: number }>(`/api/ping?ip=${encodeURIComponent(ip)}`),
 };
@@ -124,6 +133,35 @@ export interface UserRow {
   role: string;
   createdAt: string;
   olts: { id: number; name: string }[];
+}
+
+interface TicketPerson {
+  id: number;
+  name: string | null;
+  email: string;
+}
+export interface TicketRow {
+  id: number;
+  oltId: number;
+  category: string;
+  severity: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  resolutionNote: string | null;
+  rxAtOpen: number | null;
+  oltRxAtOpen: number | null;
+  rxAtVerify: number | null;
+  openedAt: string;
+  assignedAt: string | null;
+  startedAt: string | null;
+  resolvedAt: string | null;
+  verifiedAt: string | null;
+  assignedToId: number | null;
+  onu: { id: number; name: string | null; ponPort: string; serial: string | null };
+  olt: { id: number; name: string };
+  openedBy: TicketPerson | null;
+  assignedTo: TicketPerson | null;
 }
 
 export interface OltPort {

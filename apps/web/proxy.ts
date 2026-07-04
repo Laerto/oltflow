@@ -35,6 +35,10 @@ const RULES: Rule[] = [
   { method: "POST", re: /^\/api\/onus\/\d+\/replace$/, tier: TIER.ADMIN },
   { re: /^\/users(\/|$)/, tier: TIER.ADMIN }, // Users admin page
   // ── OPERATE (support + admin) ────────────────────────────────────────────
+  { method: "POST", re: /^\/api\/tickets$/, tier: TIER.OPERATE }, // open a ticket
+  { method: "PATCH", re: /^\/api\/tickets\/\d+$/, tier: TIER.OPERATE }, // (re)assign technician
+  // NOTE: GET /api/tickets(/id) + POST /api/tickets/id/action ⇒ VIEW default; the routes do
+  // the fine-grained check (assigned technician vs office, canWorkTickets).
   { method: "POST", re: /^\/api\/provision(\/.*)?$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/wifi\/update$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/onus\/\d+\/reboot$/, tier: TIER.OPERATE },
