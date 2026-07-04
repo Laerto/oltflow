@@ -9,6 +9,10 @@ import { api, pollJob, type OnuLiveResult } from "@/lib/api";
 
 const POLL_MS = 8000;
 const MAX_POINTS = 40;
+// Auto-stop guard: each live sample opens a full CLI session on the OLT (see
+// handlers/onuLive.ts), so a panel left open would hammer the device indefinitely and
+// eat one of the OLT's few concurrent VTY sessions. Stop after 5 min of running.
+const MAX_RUN_MS = 5 * 60_000;
 
 // Best-effort vendor from the MAC OUI (first 3 bytes). Small curated map of what's common
 // on this ISP; unknown prefixes just show the OUI so the office can still identify a device.
@@ -85,6 +89,7 @@ export function OnuLivePanel({
 
   const tick = useCallback(async () => {
     if (busyRef.current) return; // never overlap polls
+    if (typeof document !== "undefined" && document.hidden) return; // don't poll a backgrounded tab
     busyRef.current = true;
     try {
       const { jobId } = await api.onuLive(onuId);
@@ -120,6 +125,24 @@ export function OnuLivePanel({
       clearTimeout(first);
       clearInterval(iv);
     };
+  }, [running, tick]);
+
+  // Auto-stop after MAX_RUN_MS so a forgotten open panel can't hammer the OLT forever.
+  useEffect(() => {
+    if (!running) return;
+    const stop = setTimeout(() => {
+      setRunning(false);
+      setNote(`Live u ndal automatikisht pas ${MAX_RUN_MS / 60_000} min — kliko "Nis Live" për ta rikthyer.`);
+    }, MAX_RUN_MS);
+    return () => clearTimeout(stop);
+  }, [running]);
+
+  // Refresh immediately when the tab comes back into focus (polls are skipped while hidden).
+  useEffect(() => {
+    if (!running) return;
+    const onVis = () => { if (!document.hidden) void tick(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, [running, tick]);
 
   function toggle() {

@@ -43,25 +43,25 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-64 flex-col border-r border-border bg-sidebar lg:flex">
+      <aside className="hidden w-60 flex-col lg:flex">
         <AppSidebar onLogout={logout} />
       </aside>
-      <div className="flex flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-card/80 px-4 backdrop-blur">
-          <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border bg-card/80 px-3 backdrop-blur sm:gap-3 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <MobileNav onLogout={logout} />
             <span className="text-sm font-semibold lg:hidden">OLTFlow</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <OltSelector olts={olts} current={currentOlt} allOlts={allOlts} onChange={setCurrentOltId} />
             {can.admin(me?.role) && (
-              <Button size="sm" onClick={() => setAddOpen(true)}>
-                <Plus className="mr-1 h-4 w-4" /> Shto OLT
+              <Button size="sm" className="shrink-0" onClick={() => setAddOpen(true)}>
+                <Plus className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Shto OLT</span>
               </Button>
             )}
           </div>
         </header>
-        <main className="flex-1 p-4 lg:p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-clip p-3 sm:p-4 lg:p-6">{children}</main>
       </div>
       <AddOltModal open={addOpen} onClose={() => setAddOpen(false)} onCreated={refresh} />
     </div>

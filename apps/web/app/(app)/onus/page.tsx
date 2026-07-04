@@ -303,14 +303,14 @@ function OnusContent() {
             {allOlts ? `${olts.length} OLT` : currentOlt?.name} · {filtered.length} nga {onus.length} ONU
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Kërko SN, port, emër..."
-              className="w-60 pl-9 font-mono"
+              className="w-full pl-9 font-mono sm:w-60"
             />
           </div>
           <Button

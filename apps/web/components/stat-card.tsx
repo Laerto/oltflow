@@ -48,14 +48,14 @@ export function StatCard({
 
   return (
     <Link href={href} className="block h-full outline-none ring-0 group">
-      <Card className={`relative flex h-full flex-col overflow-hidden border-0 bg-gradient-to-br ${gradient} text-white transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${shadow}`}>
+      <Card className={`relative flex h-full flex-col gap-0 overflow-hidden border-0 p-0 bg-gradient-to-br ${gradient} text-white ring-1 ring-black/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${shadow}`}>
         <div className="relative flex-1 px-5 py-4">
           <Icon className="absolute -right-2 top-1/2 h-20 w-20 -translate-y-1/2 opacity-15 transition-all duration-500 group-hover:scale-110 group-hover:opacity-25" />
           <div className="relative z-10 text-sm font-bold tracking-wide text-white/90 uppercase">{label}</div>
           <div className="relative z-10 mt-1 text-4xl font-extrabold leading-tight tracking-tight drop-shadow-md">{value}</div>
         </div>
         {footer && footer.length > 0 && (
-          <div className={`relative z-10 flex items-center justify-between gap-2 bg-white px-5 py-2 text-xs font-semibold ${footerText}`}>
+          <div className={`relative z-10 mt-auto flex items-center justify-between gap-2 bg-white px-5 py-2.5 text-xs font-semibold ${footerText}`}>
             {footer.map((f) => (
               <span key={f.label} className="whitespace-nowrap">
                 {f.label}: <span className="font-bold">{f.value}</span>

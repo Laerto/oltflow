@@ -14,7 +14,7 @@ export function MobileNav({ onLogout }: { onLogout?: () => void }) {
           <Menu className="h-5 w-5" />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-64 bg-sidebar p-0">
+      <SheetContent side="left" className="w-60 border-slate-800 bg-slate-950 p-0">
         <AppSidebar onNavigate={() => setOpen(false)} onLogout={onLogout} />
       </SheetContent>
     </Sheet>
