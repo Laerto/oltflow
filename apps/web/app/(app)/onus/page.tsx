@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { RefreshCw, Search, Eye, Lock, Trash2, MoreVertical, Rows3, Rows4, RotateCw, Download, X, SignalHigh, SignalMedium, SignalLow } from "lucide-react";
+import { RefreshCw, Search, Eye, Lock, Trash2, MoreVertical, Rows3, Rows4, RotateCw, Download, X, SignalHigh, SignalMedium, SignalLow, Cpu } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -321,15 +321,31 @@ function OnusContent() {
             </Button>
           </div>
         </div>
-        {/* Search: full-width on mobile, constrained on desktop. */}
-        <div className="relative mt-3 sm:max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Kërko SN, port, emër..."
-            className="w-full pl-9 font-mono"
-          />
+        {/* Search + model filter row (model lives here, not among the chip filters). */}
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative sm:max-w-sm sm:flex-1">
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Kërko SN, port, emër..."
+              className="w-full pl-9 font-mono"
+            />
+          </div>
+          {models.length > 1 && (
+            <Select value={modelFilter} onValueChange={setModelFilter}>
+              <SelectTrigger className="h-9 w-full gap-2 text-xs sm:w-52">
+                <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+                <SelectValue placeholder="Të gjithë modelet" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Të gjithë modelet</SelectItem>
+                {models.map((m) => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
@@ -365,22 +381,6 @@ function OnusContent() {
           <Chip active={brFilter === "route"} onClick={() => setBrFilter("route")}>Route</Chip>
           <Chip active={brFilter === "bridge"} onClick={() => setBrFilter("bridge")}>Bridge</Chip>
         </FilterBox>
-        {/* Model sits parallel to Tipi (both describe the ONU model/type). */}
-        {models.length > 1 && (
-          <FilterBox label="Model" color="blue">
-            <Select value={modelFilter} onValueChange={setModelFilter}>
-              <SelectTrigger className="h-7 w-40 text-xs">
-                <SelectValue placeholder="All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {models.map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterBox>
-        )}
         <FilterBox label="Signal" color="amber">
           <Chip active={signalBand === "all"} onClick={() => setSignalBand("all")}>All</Chip>
           <SignalChip band="good" active={signalBand === "good"} onClick={() => setSignalBand("good")} icon={SignalHigh} label="Good" />
