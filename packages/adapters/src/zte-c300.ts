@@ -3,6 +3,7 @@ import { connectSession } from "./session-factory.js";
 import {
   parseUncfg,
   parseEponUnauth,
+  parseEponBoundIds,
   parseOnuState,
   parseEponOnuState,
   parseOnuDetail,
@@ -22,12 +23,16 @@ import {
   parsePonPort,
   onuInterface,
   oltInterface,
+  eponOltInterface,
+  eponOnuInterface,
   buildAuthorizeOnuCommands,
   buildAuthorizeAndPppoeCommands,
+  buildAuthorizeEponOnuCommands,
   buildReplaceOnuCommands,
   buildDeleteOnuCommands,
   buildEnableWanAccessCommands,
   type AuthorizeOnuParams,
+  type AuthorizeEponOnuParams,
   type PppoeParams,
   type ReplaceOnuParams,
   type DeleteOnuParams,
@@ -520,6 +525,43 @@ export async function authorizeOnu(
     output += await session.sendCommand("end", 1200);
     output += await session.sendCommand("write", 2000);
     return ensureApplied(output, params.pon);
+  } finally {
+    session.close();
+  }
+}
+
+/**
+ * Authorizes an EPON ONU (ETTO boards). Reads the parent `epon-olt` running-config to pick
+ * the first FREE onu-id (the `:N` on an unauthenticated ONU is a placeholder — the ids
+ * 1..N may already be bound to other MACs), binds the MAC, applies the per-ONU service
+ * block, then saves. Throws on any device `%Error` (e.g. an unknown `type`) so a rejected
+ * bind fails the job instead of falsely reporting success. Returns the assigned interface.
+ */
+export async function authorizeEponOnu(
+  creds: OltCreds,
+  params: Omit<AuthorizeEponOnuParams, "pon"> & { pon: Pick<PonPort, "frame" | "slot" | "port"> }
+): Promise<{ output: string; onuInterface: string; onuId: number }> {
+  const session = await login(creds);
+  try {
+    const olt = eponOltInterface(params.pon);
+    await session.sendCommand("terminal length 0", 500);
+    const cfg = await session.sendCommand(`show running-config interface ${olt}`, 2500);
+    if (!/interface\s+epon-olt/i.test(cfg)) {
+      throw new Error(`Nuk u lexua konfigurimi i ${olt} — porta EPON s'u gjet`);
+    }
+    const used = new Set(parseEponBoundIds(cfg));
+    let freeId = 1;
+    while (used.has(freeId)) freeId++;
+
+    const pon: PonPort = { ...params.pon, onuId: freeId };
+    const commands = buildAuthorizeEponOnuCommands({ ...params, pon });
+    let output = await runCommandSequence(session, commands);
+    output += await session.sendCommand("!", 1200);
+    output += await session.sendCommand("end", 1200);
+    output += await session.sendCommand("write", 2000);
+    const err = extractZteError(output);
+    if (err) throw new Error(`OLT refuzoi komandën: ${err}`);
+    return { output, onuInterface: eponOnuInterface(pon), onuId: freeId };
   } finally {
     session.close();
   }

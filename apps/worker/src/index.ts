@@ -11,6 +11,7 @@ import { handleScanUnconfigured } from "./handlers/scanUnconfigured.js";
 import { handleRefreshOnu } from "./handlers/refreshOnu.js";
 import { handleOnuLive } from "./handlers/onuLive.js";
 import { handleProvision } from "./handlers/provision.js";
+import { handleAuthorizeEponOnu } from "./handlers/authorizeEponOnu.js";
 import { handlePppoe } from "./handlers/pppoe.js";
 import { handleAuthorizePppoe } from "./handlers/authorizePppoe.js";
 import { handleWifi } from "./handlers/wifi.js";
@@ -31,6 +32,7 @@ const HANDLERS: Record<string, Handler> = {
   [JOB_NAMES.refreshOnu]: handleRefreshOnu,
   [JOB_NAMES.onuLive]: handleOnuLive,
   [JOB_NAMES.provision]: handleProvision,
+  [JOB_NAMES.authorizeEponOnu]: handleAuthorizeEponOnu,
   [JOB_NAMES.pppoe]: handlePppoe,
   [JOB_NAMES.authorizePppoe]: handleAuthorizePppoe,
   [JOB_NAMES.wifi]: handleWifi,

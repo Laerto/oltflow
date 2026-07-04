@@ -1,9 +1,13 @@
 import { z } from "zod";
-import { ONU_TYPES, TCONT_PROFILES, DEFAULT_VLAN_ID, DEFAULT_ONU_NAME, DEFAULT_TRAFFIC_PROFILE } from "./onu-constants.js";
+import { ONU_TYPES, TCONT_PROFILES, DEFAULT_VLAN_ID, DEFAULT_ONU_NAME, DEFAULT_TRAFFIC_PROFILE, DEFAULT_EPON_VLAN_ID } from "./onu-constants.js";
 
 export const ponPortString = z
   .string()
   .regex(/^gpon-onu_\d+\/\d+\/\d+:\d+$/, "Format: gpon-onu_1/15/1:1");
+
+export const eponPonPortString = z
+  .string()
+  .regex(/^epon-onu_\d+\/\d+\/\d+:\d+$/, "Format: epon-onu_1/2/3:1");
 
 export const createOltSchema = z.object({
   name: z.string().min(1, "Emri është i detyrueshëm"),
@@ -42,6 +46,15 @@ export const authorizeOnuSchema = z.object({
   tcontProfile: z.enum(TCONT_PROFILES).optional().default("SMARTOLT-1G-UP"),
   trafficProfile: z.string().optional().default(DEFAULT_TRAFFIC_PROFILE),
   vlanId: z.coerce.number().int().positive().optional().default(DEFAULT_VLAN_ID),
+});
+
+export const authorizeEponSchema = z.object({
+  oltId: z.coerce.number().int().positive(),
+  ponPort: eponPonPortString,
+  onuMac: z.string().min(1, "MAC është i detyrueshëm"),
+  onuType: z.string().min(1, "Zgjidh tipin e ONU-së"),
+  onuName: z.string().optional().default(DEFAULT_ONU_NAME),
+  vlanId: z.coerce.number().int().positive().optional().default(DEFAULT_EPON_VLAN_ID),
 });
 
 export const pppoeSchema = z.object({
@@ -85,6 +98,7 @@ export const loginSchema = z.object({
 export type CreateOltInput = z.infer<typeof createOltSchema>;
 export type UpdateOltInput = z.infer<typeof updateOltSchema>;
 export type AuthorizeOnuInput = z.infer<typeof authorizeOnuSchema>;
+export type AuthorizeEponInput = z.infer<typeof authorizeEponSchema>;
 export type PppoeInput = z.infer<typeof pppoeSchema>;
 export type AuthorizeAndPppoeInput = z.infer<typeof authorizeAndPppoeSchema>;
 export type WifiUpdateInput = z.infer<typeof wifiUpdateSchema>;

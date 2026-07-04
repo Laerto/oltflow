@@ -88,6 +88,8 @@ export const api = {
   wifiInfo: (onuId: number) => request<{ devices: WifiDevice[] }>(`/api/onus/${onuId}/wifi`),
   provision: (input: Record<string, unknown>) =>
     request<{ jobId: string }>("/api/provision", { method: "POST", body: JSON.stringify(input) }),
+  authorizeEpon: (input: Record<string, unknown>) =>
+    request<{ jobId: string }>("/api/provision/epon", { method: "POST", body: JSON.stringify(input) }),
   pppoe: (input: Record<string, unknown>) =>
     request<{ jobId: string }>("/api/provision/pppoe", { method: "POST", body: JSON.stringify(input) }),
   authorizePppoe: (input: Record<string, unknown>) =>

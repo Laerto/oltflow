@@ -104,6 +104,18 @@ export function parseEponUnauth(raw: string): UncfgOnu[] {
   return onus;
 }
 
+/** Extracts the assigned onu-ids from `show running-config interface epon-olt_...`, whose
+ * bind lines read `onu <id> type <type> mac <mac> ...`. Used by the EPON authorize path to
+ * pick the first free id so a new ONU can't collide with an existing one. */
+export function parseEponBoundIds(raw: string): number[] {
+  const ids: number[] = [];
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const m = /^\s*onu\s+(\d+)\s+type\b/i.exec(rawLine);
+    if (m) ids.push(Number(m[1]));
+  }
+  return ids;
+}
+
 export interface OnuStateRow {
   ponPort: string;
   state: string;

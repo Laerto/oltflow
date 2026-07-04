@@ -6,6 +6,7 @@ export const JOB_NAMES = {
   refreshOnu: "refresh-onu",
   onuLive: "onu-live",
   provision: "provision",
+  authorizeEponOnu: "authorize-epon-onu",
   pppoe: "pppoe",
   authorizePppoe: "authorize-pppoe",
   wifi: "wifi",
@@ -47,6 +48,14 @@ export interface ProvisionPayload {
   onuType: string;
   tcontProfile: string;
   trafficProfile: string;
+  vlanId: number;
+}
+export interface AuthorizeEponPayload {
+  oltId: number;
+  ponPort: string; // epon-onu_F/S/P:N of the unauthenticated ONU (onuId is a placeholder)
+  onuMac: string;
+  onuType: string;
+  onuName: string;
   vlanId: number;
 }
 export interface PppoePayload {

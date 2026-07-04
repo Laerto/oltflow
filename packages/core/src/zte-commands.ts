@@ -1,5 +1,5 @@
-import { onuInterface, oltInterface, type PonPort } from "./pon-port.js";
-import { DEFAULT_TRAFFIC_PROFILE, DEFAULT_VLAN_ID } from "./onu-constants.js";
+import { onuInterface, oltInterface, eponOltInterface, eponOnuInterface, type PonPort } from "./pon-port.js";
+import { DEFAULT_TRAFFIC_PROFILE, DEFAULT_VLAN_ID, DEFAULT_EPON_SLA_PROFILE } from "./onu-constants.js";
 
 export interface AuthorizeOnuParams {
   pon: PonPort;
@@ -64,6 +64,47 @@ export function buildAuthorizeOnuCommands(p: AuthorizeOnuParams): string[] {
     "security-mgmt 1 state enable mode forward protocol web https",
     "security-mgmt 998 state enable mode forward ingress-type lan protocol web https",
     "security-mgmt 999 state enable ingress-type lan protocol ftp telnet ssh snmp tr069",
+  ];
+}
+
+export interface AuthorizeEponOnuParams {
+  /** frame/slot/port identify the parent epon-olt; `onuId` is the FREE id the caller
+   * assigned (adapter computes it from the parent's existing bindings). */
+  pon: PonPort;
+  onuMac: string;
+  onuType: string;
+  onuName: string;
+  vlanId: number;
+  slaProfile?: string;
+}
+
+/**
+ * ZTE EPON authorization recipe — mirrors a verified working ONU on this deployment
+ * (bridge/hybrid, single tagged VLAN): bind the MAC on the parent `epon-olt` with a free
+ * onu-id, then apply the per-ONU service block on `epon-onu_...:id`. The bind line's
+ * `type` must be one the OLT knows (see EPON_ONU_TYPES); an unknown type makes the OLT
+ * reject with `%Error`, which the adapter surfaces as a failed job. Unlike GPON there is
+ * no tcont/gemport/tr069 stanza — EPON uses sla-profile + switchport vlan instead.
+ */
+export function buildAuthorizeEponOnuCommands(p: AuthorizeEponOnuParams): string[] {
+  const olt = eponOltInterface(p.pon);
+  const onu = eponOnuInterface(p.pon);
+  const sla = p.slaProfile ?? DEFAULT_EPON_SLA_PROFILE;
+  return [
+    "enable",
+    "configure terminal",
+    `interface ${olt}`,
+    `onu ${p.pon.onuId} type ${p.onuType} mac ${p.onuMac} ip-cfg static`,
+    "exit",
+    `interface ${onu}`,
+    "admin enable",
+    `property description ${p.pon.onuId}$$${p.onuName}$$`,
+    "ems-autocfg-request disable",
+    `sla-profile ${sla} vport 1`,
+    "encrypt direction downstream enable vport 1",
+    "switchport mode hybrid vport 1",
+    `switchport vlan ${p.vlanId} tag vport 1`,
+    "exit",
   ];
 }
 
