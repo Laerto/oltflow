@@ -116,8 +116,8 @@ const BOX_LABEL: Record<string, string> = {
 function FilterBox({ label, color, children }: { label: string; color: keyof typeof BOX_BORDER; children: React.ReactNode }) {
   return (
     <div className={`flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
-      <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide ${BOX_LABEL[color]}`}>{label}</span>
-      <div className="flex flex-wrap items-center gap-1">{children}</div>
+      <span className={`w-14 shrink-0 text-[10px] font-bold uppercase tracking-wide sm:w-auto ${BOX_LABEL[color]}`}>{label}</span>
+      <div className="flex flex-1 flex-wrap items-center gap-1.5 sm:flex-none">{children}</div>
     </div>
   );
 }
@@ -126,7 +126,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition ${
+      className={`flex flex-1 basis-16 items-center justify-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition sm:flex-none sm:basis-auto ${
         active
           ? "border-primary bg-primary/15 text-primary"
           : "border-border bg-card text-muted-foreground hover:text-foreground"
@@ -162,7 +162,7 @@ function SignalChip({
   return (
     <button
       onClick={onClick}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition ${active ? tone.active : `bg-card ${tone.idle}`}`}
+      className={`flex flex-1 basis-16 items-center justify-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition sm:flex-none sm:basis-auto ${active ? tone.active : `bg-card ${tone.idle}`}`}
     >
       <Icon className="h-3.5 w-3.5" /> {label}
     </button>
@@ -293,39 +293,43 @@ function OnusContent() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
-            {allOlts ? "ONU-të — Të gjitha OLT-të" : "ONU-të e Konfiguruara"}
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {allOlts ? `${olts.length} OLT` : currentOlt?.name} · {filtered.length} nga {onus.length} ONU
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-auto">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Kërko SN, port, emër..."
-              className="w-full pl-9 font-mono sm:w-60"
-            />
+      <div className="mb-4">
+        {/* Title + top-right actions (one row on every size, so CSV/Rifresko stay top-right). */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
+              {allOlts ? "ONU-të — Të gjitha OLT-të" : "ONU-të e Konfiguruara"}
+            </h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {allOlts ? `${olts.length} OLT` : currentOlt?.name} · {filtered.length} nga {onus.length} ONU
+            </p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setComfortable((v) => !v)}
-            title={comfortable ? "Dendësi kompakte" : "Dendësi e rehatshme"}
-          >
-            {comfortable ? <Rows3 className="h-4 w-4" /> : <Rows4 className="h-4 w-4" />}
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => exportCsv(filtered)} title="Eksporto CSV (të filtruarat)">
-            <Download className="h-4 w-4" /> CSV
-          </Button>
-          <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Rifresko
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setComfortable((v) => !v)}
+              title={comfortable ? "Dendësi kompakte" : "Dendësi e rehatshme"}
+            >
+              {comfortable ? <Rows3 className="h-4 w-4" /> : <Rows4 className="h-4 w-4" />}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => exportCsv(filtered)} title="Eksporto CSV (të filtruarat)">
+              <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
+            </Button>
+            <Button variant="secondary" size="sm" onClick={load} disabled={loading} title="Rifresko listën">
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> <span className="hidden sm:inline">Rifresko</span>
+            </Button>
+          </div>
+        </div>
+        {/* Search: full-width on mobile, constrained on desktop. */}
+        <div className="relative mt-3 sm:max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Kërko SN, port, emër..."
+            className="w-full pl-9 font-mono"
+          />
         </div>
       </div>
 
