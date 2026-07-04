@@ -102,9 +102,9 @@ export const api = {
   logout: () => request<{ ok: boolean }>("/api/logout", { method: "POST" }),
   me: () => request<Me>("/api/me"),
   listUsers: () => request<{ users: UserRow[] }>("/api/users"),
-  createUser: (input: { email: string; name?: string; password: string; role: string }) =>
+  createUser: (input: { email: string; name?: string; password: string; role: string; oltIds?: number[] }) =>
     request<{ user: UserRow }>("/api/users", { method: "POST", body: JSON.stringify(input) }),
-  updateUser: (id: number, input: { name?: string; role?: string; password?: string }) =>
+  updateUser: (id: number, input: { name?: string; role?: string; password?: string; oltIds?: number[] }) =>
     request<{ user: UserRow }>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   deleteUser: (id: number) => request<{ ok: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
   ping: (ip: string) =>
@@ -123,6 +123,7 @@ export interface UserRow {
   name: string | null;
   role: string;
   createdAt: string;
+  olts: { id: number; name: string }[];
 }
 
 export interface OltPort {

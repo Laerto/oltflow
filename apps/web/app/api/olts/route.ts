@@ -2,17 +2,24 @@ import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { createOltSchema, encryptSecret, JOB_NAMES } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { allowedOltIds } from "@/lib/olt-access";
 import { enqueueJob, enqueueUntracked } from "@/lib/queue";
 
 const OLT_CRED_KEY = process.env.OLT_CRED_KEY ?? "";
 
 export async function GET() {
-  await requireUser();
+  const session = await requireUser();
+  // Scope the list to the user's zone (support/viewer with an explicit assignment); admins
+  // and unassigned users see all. This is the primary gate — a scoped user can't even pick
+  // another zone's OLT in the selector, so every per-OLT page follows automatically.
+  const allowed = await allowedOltIds(session);
+  const oltWhere = allowed === "all" ? {} : { id: { in: allowed } };
+  const onuWhere = allowed === "all" ? {} : { oltId: { in: allowed } };
   // Two flat queries instead of 1 + N counts: list the OLTs, then roll up ONU
   // totals/online counts for all of them in a single grouped aggregate.
   const [olts, grouped] = await Promise.all([
-    prisma.olt.findMany({ orderBy: { name: "asc" } }),
-    prisma.onu.groupBy({ by: ["oltId", "state"], _count: { _all: true } }),
+    prisma.olt.findMany({ where: oltWhere, orderBy: { name: "asc" } }),
+    prisma.onu.groupBy({ by: ["oltId", "state"], _count: { _all: true }, where: onuWhere }),
   ]);
 
   const totals = new Map<number, { total: number; online: number }>();

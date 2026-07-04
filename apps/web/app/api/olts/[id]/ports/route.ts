@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { DEFAULT_PORTS_PER_SLOT, DEFAULT_EPON_PORTS_PER_SLOT } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { guardOltAccess } from "@/lib/olt-access";
 
 interface Port {
   port: number;
@@ -21,6 +22,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   await requireUser();
   const { id } = await params;
   const oltId = Number(id);
+  const denied = await guardOltAccess(oltId);
+  if (denied) return denied;
 
   const olt = await prisma.olt.findUnique({
     where: { id: oltId },

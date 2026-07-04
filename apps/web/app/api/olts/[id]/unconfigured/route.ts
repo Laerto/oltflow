@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { requireUser } from "@/lib/auth";
+import { guardOltAccess } from "@/lib/olt-access";
 
 // Reads the persisted unconfigured (waiting-authorization) ONUs for an OLT — kept
 // continuously up to date by the worker's inventory sync, so no live device scan
@@ -8,6 +9,8 @@ import { requireUser } from "@/lib/auth";
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
+  const denied = await guardOltAccess(Number(id));
+  if (denied) return denied;
   const rows = await prisma.uncfgOnu.findMany({
     where: { oltId: Number(id) },
     orderBy: { firstSeen: "asc" },

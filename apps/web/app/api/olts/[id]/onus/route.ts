@@ -3,6 +3,7 @@ import { prisma } from "@oltflow/db";
 import { getWanIpsBySerial } from "@oltflow/adapters";
 import { hasTier, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { guardOltAccess } from "@/lib/olt-access";
 import { serializeOnu } from "@/lib/onu-serialize";
 
 const GENIEACS_URL = process.env.GENIEACS_URL ?? "";
@@ -13,6 +14,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const canOperate = hasTier(session.role, TIER.OPERATE);
   const { id } = await params;
   const oltId = Number(id);
+  const denied = await guardOltAccess(oltId);
+  if (denied) return denied;
 
   const onus = await prisma.onu.findMany({
     where: { oltId },

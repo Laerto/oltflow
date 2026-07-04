@@ -15,7 +15,14 @@ export async function GET() {
   const { error } = await requireAdmin();
   if (error) return error;
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      createdAt: true,
+      olts: { select: { id: true, name: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json({ users });
@@ -34,9 +41,18 @@ export async function POST(request: Request) {
   }
 
   const passwordH = await bcrypt.hash(parsed.data.password, 10);
+  // Scope applies to support/viewer only; admins are always unrestricted so we never
+  // persist an OLT list for them (avoids a stale scope if they're later demoted).
+  const oltIds = parsed.data.role === "admin" ? [] : parsed.data.oltIds ?? [];
   const user = await prisma.user.create({
-    data: { email, name: parsed.data.name ?? null, passwordH, role: parsed.data.role },
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
+    data: {
+      email,
+      name: parsed.data.name ?? null,
+      passwordH,
+      role: parsed.data.role,
+      olts: oltIds.length ? { connect: oltIds.map((id) => ({ id })) } : undefined,
+    },
+    select: { id: true, email: true, name: true, role: true, createdAt: true, olts: { select: { id: true, name: true } } },
   });
   return NextResponse.json({ user });
 }

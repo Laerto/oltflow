@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { replaceOnuSchema, JOB_NAMES } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { guardOnuAccess } from "@/lib/olt-access";
 import { enqueueJob } from "@/lib/queue";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
+  const denied = await guardOnuAccess(Number(id));
+  if (denied) return denied;
   const onu = await prisma.onu.findUnique({ where: { id: Number(id) } });
   if (!onu) return NextResponse.json({ error: "ONU nuk u gjet" }, { status: 404 });
 

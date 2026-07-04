@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { prisma } from "@oltflow/db";
+import { prisma, Prisma } from "@oltflow/db";
 import { userUpdateSchema, roleRank, TIER } from "@oltflow/core";
 import { getSession } from "@/lib/auth";
 
@@ -36,15 +36,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (await wouldRemoveLastAdmin(id)) return NextResponse.json({ error: "Duhet të mbetet të paktën një admin" }, { status: 400 });
   }
 
-  const data: { name?: string | null; role?: string; passwordH?: string } = {};
+  const data: Prisma.UserUpdateInput = {};
   if (parsed.data.name !== undefined) data.name = parsed.data.name;
   if (parsed.data.role !== undefined) data.role = parsed.data.role;
   if (parsed.data.password !== undefined) data.passwordH = await bcrypt.hash(parsed.data.password, 10);
+  // `set` replaces the whole assignment. Promoting to admin clears any scope (admins are
+  // never restricted); otherwise apply the provided list (empty = unrestricted).
+  const effectiveRole = parsed.data.role ?? target.role;
+  if (effectiveRole === "admin") {
+    if (parsed.data.role === "admin") data.olts = { set: [] };
+  } else if (parsed.data.oltIds !== undefined) {
+    data.olts = { set: parsed.data.oltIds.map((oltId) => ({ id: oltId })) };
+  }
 
   const user = await prisma.user.update({
     where: { id },
     data,
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
+    select: { id: true, email: true, name: true, role: true, createdAt: true, olts: { select: { id: true, name: true } } },
   });
   return NextResponse.json({ user });
 }

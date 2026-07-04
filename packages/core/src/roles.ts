@@ -40,6 +40,8 @@ export const userCreateSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   password: z.string().min(6).max(200),
   role: z.enum(ROLES),
+  // OLTs the user may see/operate. Empty/omitted = all (unrestricted). Ignored for admins.
+  oltIds: z.array(z.number().int().positive()).optional(),
 });
 
 export const userUpdateSchema = z
@@ -47,10 +49,12 @@ export const userUpdateSchema = z
     name: z.string().trim().min(1).max(80).optional(),
     role: z.enum(ROLES).optional(),
     password: z.string().min(6).max(200).optional(),
+    oltIds: z.array(z.number().int().positive()).optional(),
   })
-  .refine((v) => v.name !== undefined || v.role !== undefined || v.password !== undefined, {
-    message: "Asgjë për të ndryshuar",
-  });
+  .refine(
+    (v) => v.name !== undefined || v.role !== undefined || v.password !== undefined || v.oltIds !== undefined,
+    { message: "Asgjë për të ndryshuar" }
+  );
 
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;

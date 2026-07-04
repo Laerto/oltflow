@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { requireUser } from "@/lib/auth";
+import { guardOltAccess } from "@/lib/olt-access";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
   const oltId = Number(id);
+  const denied = await guardOltAccess(oltId);
+  if (denied) return denied;
 
   const now = Date.now();
   const in7Days = new Date(now + 7 * 24 * 60 * 60 * 1000);

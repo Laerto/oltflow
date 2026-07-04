@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { requireUser } from "@/lib/auth";
+import { guardOltAccess } from "@/lib/olt-access";
 
 // Per-PON-port throughput for the dashboard chart. Reads sample rows written by the
 // worker's SNMP poll (sync/pon-traffic.ts) — no live device call here.
@@ -8,6 +9,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   await requireUser();
   const { id } = await params;
   const oltId = Number(id);
+  const denied = await guardOltAccess(oltId);
+  if (denied) return denied;
 
   // Last 30 minutes of samples (worker polls every ~30s ⇒ ~60 points).
   const since = new Date(Date.now() - 30 * 60 * 1000);

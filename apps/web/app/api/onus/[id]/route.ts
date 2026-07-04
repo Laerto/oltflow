@@ -3,6 +3,7 @@ import { prisma } from "@oltflow/db";
 import { getWanIpsBySerial } from "@oltflow/adapters";
 import { JOB_NAMES, isEponPort, onuConnectionKind } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { guardOnuAccess } from "@/lib/olt-access";
 import { enqueueJob } from "@/lib/queue";
 
 const GENIEACS_URL = process.env.GENIEACS_URL ?? "";
@@ -10,6 +11,8 @@ const GENIEACS_URL = process.env.GENIEACS_URL ?? "";
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
+  const denied = await guardOnuAccess(Number(id));
+  if (denied) return denied;
   const onu = await prisma.onu.findUnique({
     where: { id: Number(id) },
     include: { signals: { orderBy: { recordedAt: "desc" }, take: 1 }, olt: { select: { id: true, name: true } } },
@@ -57,6 +60,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   const { id } = await params;
+  const denied = await guardOnuAccess(Number(id));
+  if (denied) return denied;
   const body = (await request.json().catch(() => ({}))) as { mgmtIp?: unknown };
   const raw = typeof body.mgmtIp === "string" ? body.mgmtIp.trim() : "";
   const ipOk = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
@@ -82,6 +87,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
+  const denied = await guardOnuAccess(Number(id));
+  if (denied) return denied;
   const onu = await prisma.onu.findUnique({ where: { id: Number(id) } });
   if (!onu) return NextResponse.json({ error: "ONU nuk u gjet" }, { status: 404 });
 

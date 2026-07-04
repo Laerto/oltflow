@@ -3,6 +3,7 @@ import { prisma } from "@oltflow/db";
 import { getWanIpsBySerial } from "@oltflow/adapters";
 import { hasTier, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { allowedOltIds } from "@/lib/olt-access";
 import { serializeOnu } from "@/lib/onu-serialize";
 
 const GENIEACS_URL = process.env.GENIEACS_URL ?? "";
@@ -17,7 +18,11 @@ export async function GET() {
   const session = await requireUser();
   const canOperate = hasTier(session.role, TIER.OPERATE);
 
+  // Restrict the fleet-wide view to the user's assigned OLTs (support/viewer zones).
+  const allowed = await allowedOltIds(session);
+
   const onus = await prisma.onu.findMany({
+    where: allowed === "all" ? {} : { oltId: { in: allowed } },
     orderBy: [{ oltId: "asc" }, { ponPort: "asc" }],
     include: {
       signals: { orderBy: { recordedAt: "desc" }, take: 1 },

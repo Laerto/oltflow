@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { JOB_NAMES } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { guardOnuAccess } from "@/lib/olt-access";
 import { enqueueJob } from "@/lib/queue";
 
 // On-demand live ONU snapshot (traffic rate + connected MACs), run in the worker over CLI.
@@ -9,6 +10,8 @@ import { enqueueJob } from "@/lib/queue";
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
+  const denied = await guardOnuAccess(Number(id));
+  if (denied) return denied;
   const onu = await prisma.onu.findUnique({ where: { id: Number(id) } });
   if (!onu) return NextResponse.json({ error: "ONU nuk u gjet" }, { status: 404 });
 

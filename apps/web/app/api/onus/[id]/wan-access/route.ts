@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { JOB_NAMES, isEponPort } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { guardOnuAccess } from "@/lib/olt-access";
 import { enqueueJob } from "@/lib/queue";
 
 // Enables WAN-side web access to the ONU's own management UI (security-mgmt WAN rules).
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
+  const denied = await guardOnuAccess(Number(id));
+  if (denied) return denied;
   const onu = await prisma.onu.findUnique({ where: { id: Number(id) } });
   if (!onu) return NextResponse.json({ error: "ONU nuk u gjet" }, { status: 404 });
   if (isEponPort(onu.ponPort)) {

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { requireUser } from "@/lib/auth";
+import { guardOnuAccess } from "@/lib/olt-access";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
   const onuId = Number(id);
+  const denied = await guardOnuAccess(onuId);
+  if (denied) return denied;
 
   const signals = await prisma.signal.findMany({
     where: { onuId },

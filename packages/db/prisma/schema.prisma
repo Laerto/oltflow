@@ -31,6 +31,7 @@ model Olt {
   jobs        Job[]
   auditLogs   AuditLog[]
   ponTraffic  PonTraffic[]
+  users       User[]    @relation("UserOlts") // support/viewer scoping (empty = all; admin ignores)
   createdAt   DateTime  @default(now())
 }
 
@@ -119,6 +120,9 @@ model User {
   name      String?
   passwordH String
   role      String   @default("operator") // admin | operator | viewer
+  /// OLTs this user may see/operate. Empty = all (backward compatible, unrestricted);
+  /// admins are never scoped. Assign specific OLTs to restrict support to their zone.
+  olts      Olt[]    @relation("UserOlts")
   createdAt DateTime @default(now())
 }
 
