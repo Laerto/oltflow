@@ -115,9 +115,9 @@ const BOX_LABEL: Record<string, string> = {
 
 function FilterBox({ label, color, children }: { label: string; color: keyof typeof BOX_BORDER; children: React.ReactNode }) {
   return (
-    <div className={`flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
+    <div className={`flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
       <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide ${BOX_LABEL[color]}`}>{label}</span>
-      <div className="flex flex-nowrap items-center gap-1">{children}</div>
+      <div className="flex flex-wrap items-center gap-1">{children}</div>
     </div>
   );
 }
@@ -348,8 +348,9 @@ function OnusContent() {
         </div>
       )}
 
-      {/* Filters — each group in its own colored box; single stable row (scrolls if narrow) */}
-      <div className="mb-3 flex items-stretch gap-2 overflow-x-auto pb-1">
+      {/* Filters — each group in its own colored box. Stack full-width on mobile (chips wrap
+          inside) so nothing needs horizontal scrolling; flow in a wrapping row on sm+. */}
+      <div className="mb-3 flex flex-col gap-2 pb-1 sm:flex-row sm:flex-wrap sm:items-stretch">
         <FilterBox label="Status" color="slate">
           <Chip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>Të gjitha</Chip>
           <Chip active={statusFilter === "online"} onClick={() => setStatusFilter("online")}>Online</Chip>
