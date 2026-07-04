@@ -115,9 +115,9 @@ const BOX_LABEL: Record<string, string> = {
 
 function FilterBox({ label, color, children }: { label: string; color: keyof typeof BOX_BORDER; children: React.ReactNode }) {
   return (
-    <div className={`flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
-      <span className={`w-14 shrink-0 text-[10px] font-bold uppercase tracking-wide sm:w-auto ${BOX_LABEL[color]}`}>{label}</span>
-      <div className="flex flex-1 flex-wrap items-center gap-1.5 sm:flex-none">{children}</div>
+    <div className={`flex items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
+      <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide ${BOX_LABEL[color]}`}>{label}</span>
+      <div className="flex flex-wrap items-center gap-1">{children}</div>
     </div>
   );
 }
@@ -126,7 +126,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 basis-16 items-center justify-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition sm:flex-none sm:basis-auto ${
+      className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition sm:px-3 sm:py-1 sm:text-xs ${
         active
           ? "border-primary bg-primary/15 text-primary"
           : "border-border bg-card text-muted-foreground hover:text-foreground"
@@ -162,9 +162,9 @@ function SignalChip({
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 basis-16 items-center justify-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition sm:flex-none sm:basis-auto ${active ? tone.active : `bg-card ${tone.idle}`}`}
+      className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${active ? tone.active : `bg-card ${tone.idle}`}`}
     >
-      <Icon className="h-3.5 w-3.5" /> {label}
+      <Icon className="hidden h-3.5 w-3.5 sm:inline" /> {label}
     </button>
   );
 }
@@ -354,7 +354,7 @@ function OnusContent() {
 
       {/* Filters — each group in its own colored box. Stack full-width on mobile (chips wrap
           inside) so nothing needs horizontal scrolling; flow in a wrapping row on sm+. */}
-      <div className="mb-3 flex flex-col gap-2 pb-1 sm:flex-row sm:flex-wrap sm:items-stretch">
+      <div className="mb-3 flex flex-col items-start gap-2 pb-1 sm:flex-row sm:flex-wrap sm:items-stretch">
         <FilterBox label="Status" color="slate">
           <Chip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>Të gjitha</Chip>
           <Chip active={statusFilter === "online"} onClick={() => setStatusFilter("online")}>Online</Chip>
