@@ -17,6 +17,7 @@ import {
   Trash2,
   Wifi,
   Wrench,
+  MapPin,
 } from "lucide-react";
 import { api, ApiError, pollJob, type OnuRow, type WifiDevice } from "@/lib/api";
 import { stateBadgeColor } from "@/lib/ui-helpers";
@@ -103,6 +104,24 @@ export default function OnuDetailPage() {
     }
   }
 
+  function setMyLocation() {
+    if (!navigator.geolocation) {
+      setRebootMsg({ kind: "err", text: "Shfletuesi s'e mbështet GPS-in." });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (p) => {
+        try {
+          await api.setOnuLocation(onuId, +p.coords.latitude.toFixed(6), +p.coords.longitude.toFixed(6));
+          setRebootMsg({ kind: "ok", text: `Vendndodhja u ruajt (${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}).` });
+        } catch {
+          setRebootMsg({ kind: "err", text: "Ruajtja e vendndodhjes dështoi." });
+        }
+      },
+      () => setRebootMsg({ kind: "err", text: "S'u mor GPS-i — lejo vendndodhjen në shfletues." })
+    );
+  }
+
   async function doReboot() {
     if (!wifi?.deviceId) return;
     if (!confirm("Të riniset ONU/router-i i klientit? Lidhja do ndërpritet për pak minuta.")) return;
@@ -171,6 +190,11 @@ export default function OnuDetailPage() {
           {operate && (
             <Button variant="secondary" onClick={() => setTicketOpen(true)} className="border-amber-500/40 text-amber-600 hover:bg-amber-500/10">
               <Wrench className="h-4 w-4" /> Hap tiket
+            </Button>
+          )}
+          {operate && (
+            <Button variant="secondary" onClick={setMyLocation} title="Ruaj vendndodhjen GPS të kësaj ONU-je (për hartën)">
+              <MapPin className="h-4 w-4" /> <span className="hidden sm:inline">Vendndodhja</span>
             </Button>
           )}
           <Button variant="secondary" onClick={doRefresh} disabled={refreshing || epon} title={epon ? "Rifreskimi CLI nuk është ende i implementuar për EPON" : undefined}>
