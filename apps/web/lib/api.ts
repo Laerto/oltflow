@@ -28,6 +28,8 @@ export interface OltSummary {
   slots: number[];
   eponSlots: number[];
   snmpCommunity: string | null;
+  latitude: number | null;
+  longitude: number | null;
   location: string | null;
   status: string;
   lastSync: string | null;
@@ -108,6 +110,9 @@ export const api = {
   updateUser: (id: number, input: { name?: string; role?: string; password?: string; oltIds?: number[]; telegramChatId?: string }) =>
     request<{ user: UserRow }>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   listTechnicians: () => request<{ technicians: { id: number; name: string | null; email: string }[] }>("/api/technicians"),
+  mapData: () => request<{ olts: MapOlt[]; onus: MapOnu[] }>("/api/map"),
+  setOnuLocation: (id: number, latitude: number | null, longitude: number | null) =>
+    request<{ ok: boolean }>(`/api/onus/${id}`, { method: "PATCH", body: JSON.stringify({ latitude, longitude }) }),
   deleteUser: (id: number) => request<{ ok: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
   // ── Tickets (fault repair) ──
   listTickets: (status?: string) => request<{ tickets: TicketRow[] }>(`/api/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`),
@@ -165,6 +170,26 @@ export interface TicketRow {
   olt: { id: number; name: string };
   openedBy: TicketPerson | null;
   assignedTo: TicketPerson | null;
+}
+
+export interface MapOlt {
+  id: number;
+  name: string;
+  lat: number;
+  lng: number;
+  status: string;
+  location: string | null;
+}
+export interface MapOnu {
+  id: number;
+  name: string | null;
+  ponPort: string;
+  oltId: number;
+  lat: number;
+  lng: number;
+  state: string | null;
+  onuRx: number | null;
+  band: string; // good | warning | critical | offline | unknown
 }
 
 export interface OltPort {

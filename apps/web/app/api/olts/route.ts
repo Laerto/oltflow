@@ -42,6 +42,8 @@ export async function GET() {
       slots: olt.slots,
       eponSlots: olt.eponSlots,
       snmpCommunity: olt.snmpCommunity,
+      latitude: olt.latitude,
+      longitude: olt.longitude,
       location: olt.location,
       status: olt.status,
       lastSync: olt.lastSync,
@@ -77,6 +79,8 @@ export async function POST(request: Request) {
       slots: input.slots,
       eponSlots: input.eponSlots,
       snmpCommunity: input.snmpCommunity || undefined,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
     },
   });
 

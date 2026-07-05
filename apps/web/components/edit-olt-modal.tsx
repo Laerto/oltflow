@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, MapPin } from "lucide-react";
 import { api, ApiError, type OltSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +44,8 @@ export function EditOltModal({
   const [slots, setSlots] = useState(olt.slots.join(","));
   const [eponSlots, setEponSlots] = useState(olt.eponSlots.join(","));
   const [snmpCommunity, setSnmpCommunity] = useState(olt.snmpCommunity ?? "public");
+  const [lat, setLat] = useState(olt.latitude != null ? String(olt.latitude) : "");
+  const [lng, setLng] = useState(olt.longitude != null ? String(olt.longitude) : "");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,6 +68,8 @@ export function EditOltModal({
         slots: parseSlots(slots),
         eponSlots: parseSlots(eponSlots),
         snmpCommunity: snmpCommunity.trim(),
+        latitude: lat.trim() ? Number(lat) : null,
+        longitude: lng.trim() ? Number(lng) : null,
       });
       setSuccess("U ruajt — sinkronizimi i ardhshëm do përdorë slot-et e reja (deri në 60s).");
       await onSaved();
@@ -151,6 +155,29 @@ export function EditOltModal({
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">SNMP Community</Label>
               <Input value={snmpCommunity} onChange={(e) => setSnmpCommunity(e.target.value)} placeholder="public" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" /> Vendndodhja (harta)
+            </Label>
+            <div className="flex gap-2">
+              <Input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Gjerësia (lat) p.sh. 40.0587" />
+              <Input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Gjatësia (lng) p.sh. 19.9819" />
+              <Button
+                type="button"
+                variant="secondary"
+                className="shrink-0"
+                onClick={() =>
+                  navigator.geolocation?.getCurrentPosition(
+                    (p) => { setLat(p.coords.latitude.toFixed(6)); setLng(p.coords.longitude.toFixed(6)); },
+                    () => setError("S'u mor vendndodhja — lejo GPS-in në shfletues.")
+                  )
+                }
+                title="Përdor vendndodhjen time"
+              >
+                <MapPin className="h-4 w-4" />
+              </Button>
             </div>
           </div>
 

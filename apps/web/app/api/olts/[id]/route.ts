@@ -36,6 +36,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(input.slots !== undefined && { slots: input.slots }),
       ...(input.eponSlots !== undefined && { eponSlots: input.eponSlots }),
       ...(input.snmpCommunity !== undefined && { snmpCommunity: input.snmpCommunity || null }),
+      ...(input.latitude !== undefined && { latitude: input.latitude }),
+      ...(input.longitude !== undefined && { longitude: input.longitude }),
     },
   });
 

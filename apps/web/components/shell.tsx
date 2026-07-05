@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Server, Plus } from "lucide-react";
+import { Server, Plus, MapPin } from "lucide-react";
 import { useOlts, useMe } from "@/app/(app)/providers";
 import { api, ApiError, pollJob } from "@/lib/api";
 import { can } from "@/lib/permissions";
@@ -88,6 +88,8 @@ function AddOltModal({
   const [slots, setSlots] = useState("4,15,17,19,20");
   const [eponSlots, setEponSlots] = useState("");
   const [snmpCommunity, setSnmpCommunity] = useState("public");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -110,6 +112,8 @@ function AddOltModal({
         slots: parseSlots(slots),
         eponSlots: parseSlots(eponSlots),
         snmpCommunity: snmpCommunity.trim() || "public",
+        latitude: lat.trim() ? Number(lat) : null,
+        longitude: lng.trim() ? Number(lng) : null,
       });
       setSuccess("OLT u shtua, duke testuar lidhjen...");
       await onCreated();
@@ -252,6 +256,28 @@ function AddOltModal({
                   onChange={(e) => setSnmpCommunity(e.target.value)}
                   placeholder="public"
                 />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Vendndodhja (harta) — opsionale</Label>
+              <div className="flex gap-2">
+                <Input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="lat (40.0587)" />
+                <Input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="lng (19.9819)" />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="shrink-0"
+                  onClick={() =>
+                    navigator.geolocation?.getCurrentPosition(
+                      (p) => { setLat(p.coords.latitude.toFixed(6)); setLng(p.coords.longitude.toFixed(6)); },
+                      () => setError("S'u mor vendndodhja — lejo GPS-in."),
+                    )
+                  }
+                  title="Përdor vendndodhjen time"
+                >
+                  <MapPin className="h-4 w-4" />
+                </Button>
               </div>
             </div>
 

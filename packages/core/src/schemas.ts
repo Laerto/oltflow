@@ -22,6 +22,8 @@ export const createOltSchema = z.object({
   slots: z.array(z.number().int().positive()).optional(),
   eponSlots: z.array(z.number().int().positive()).optional(),
   snmpCommunity: z.string().optional(),
+  latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
+  longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
 });
 
 export const updateOltSchema = z.object({
@@ -37,6 +39,8 @@ export const updateOltSchema = z.object({
   slots: z.array(z.number().int().positive()).optional(),
   eponSlots: z.array(z.number().int().positive()).optional(),
   snmpCommunity: z.string().optional(),
+  latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
+  longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
 });
 
 export const authorizeOnuSchema = z.object({

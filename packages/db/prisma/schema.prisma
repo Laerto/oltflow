@@ -24,6 +24,8 @@ model Olt {
   snmpCommunity String? @default("public")
   snmpVersion   String? @default("2c") // 2c | v3 (v3 not implemented yet)
   snmpPort      Int     @default(161)
+  latitude    Float?    // geolocation for the network map (ODN / premium)
+  longitude   Float?
   status      String    @default("unknown") // online | offline | unknown
   lastSync    DateTime?
   onus        Onu[]
@@ -72,6 +74,8 @@ model Onu {
   mac            String? // MAC learned on the bridge port (the downstream Mikrotik) — RADIUS join key
   mgmtIp         String? // live device IP (route ONU / bridge Mikrotik), filled from RADIUS by the worker
   expiration     DateTime? // client account expiry from RADIUS Manager (rm_users), filled by the worker
+  latitude       Float? // customer/ONU geolocation for the network map (set at install or manually)
+  longitude      Float?
   lastSeen       DateTime?
   signals        Signal[]
   tickets        Ticket[]

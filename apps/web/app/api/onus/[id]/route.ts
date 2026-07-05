@@ -56,32 +56,52 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
 }
 
-// Sets the management IP (Mikrotik behind a bridge ONU) used by the Winbox launcher.
+// Sets the management IP (Mikrotik behind a bridge ONU) used by the Winbox launcher, and/or
+// the ONU's geolocation (network map). Only the fields present in the body are updated.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   const { id } = await params;
   const denied = await guardOnuAccess(Number(id));
   if (denied) return denied;
-  const body = (await request.json().catch(() => ({}))) as { mgmtIp?: unknown };
-  const raw = typeof body.mgmtIp === "string" ? body.mgmtIp.trim() : "";
-  const ipOk = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
-  if (raw && !ipOk.test(raw)) {
-    return NextResponse.json({ error: "IP jo e vlefshme" }, { status: 400 });
+  const body = (await request.json().catch(() => ({}))) as { mgmtIp?: unknown; latitude?: unknown; longitude?: unknown };
+
+  const data: { mgmtIp?: string | null; latitude?: number | null; longitude?: number | null } = {};
+  if ("mgmtIp" in body) {
+    const raw = typeof body.mgmtIp === "string" ? body.mgmtIp.trim() : "";
+    const ipOk = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+    if (raw && !ipOk.test(raw)) return NextResponse.json({ error: "IP jo e vlefshme" }, { status: 400 });
+    data.mgmtIp = raw || null;
   }
-  const onu = await prisma.onu.update({ where: { id: Number(id) }, data: { mgmtIp: raw || null } });
+  if ("latitude" in body || "longitude" in body) {
+    if (body.latitude === null || body.longitude === null) {
+      data.latitude = null;
+      data.longitude = null;
+    } else {
+      const lat = Number(body.latitude);
+      const lng = Number(body.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return NextResponse.json({ error: "Koordinata jo të vlefshme" }, { status: 400 });
+      }
+      data.latitude = lat;
+      data.longitude = lng;
+    }
+  }
+  if (Object.keys(data).length === 0) return NextResponse.json({ error: "Asgjë për të ndryshuar" }, { status: 400 });
+
+  const onu = await prisma.onu.update({ where: { id: Number(id) }, data });
   await prisma.auditLog
     .create({
       data: {
-        action: "set_mgmt_ip",
+        action: data.latitude !== undefined ? "set_onu_location" : "set_mgmt_ip",
         oltId: onu.oltId,
         ponPort: onu.ponPort,
         result: "success",
         userId: Number(user.sub),
-        payload: { mgmtIp: raw || null },
+        payload: JSON.parse(JSON.stringify(data)),
       },
     })
     .catch(() => {});
-  return NextResponse.json({ ok: true, mgmtIp: raw || null });
+  return NextResponse.json({ ok: true, mgmtIp: onu.mgmtIp, latitude: onu.latitude, longitude: onu.longitude });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
