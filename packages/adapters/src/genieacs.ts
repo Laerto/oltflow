@@ -45,35 +45,34 @@ export async function getWanIpsBySerial(genieacsUrl: string, serials: string[]):
   const wanted = serials.filter(Boolean).map((s) => s.toUpperCase());
   if (!wanted.length) return result;
 
-  // For a handful of serials (the single-ONU detail page passes one) narrow the fetch to
-  // just those devices with an `_id` regex — GenieACS ids embed the serial — instead of
-  // downloading the ENTIRE device tree on every request. That full pull is what made the
-  // ONU detail view spin on open. Above ~40 serials the regex would bloat the request URL,
-  // so the fleet-wide ONU list keeps the single bulk fetch (real scale fix = syncAcs mirror).
-  const query =
-    wanted.length <= 40
-      ? { _id: { $regex: wanted.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") } }
-      : undefined;
+  // Always query GenieACS in serial-filtered batches (an `_id` regex per chunk — the ids
+  // embed the serial) instead of ever pulling the ENTIRE device tree. A big OLT (hundreds
+  // of serials) used to download the whole ACS on every list load, which made that OLT's
+  // ONU list crawl and its signal filters feel broken until it finally arrived. Chunking
+  // keeps each request URL small; the batches run in parallel and a failed one is skipped.
+  // (The real scale fix is still a syncAcs→Postgres mirror.)
+  const projection =
+    "_id,InternetGatewayDevice.WANDevice,InternetGatewayDevice.ManagementServer.ConnectionRequestURL";
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const CHUNK = 40;
+  const chunks: string[][] = [];
+  for (let i = 0; i < wanted.length; i += CHUNK) chunks.push(wanted.slice(i, i + CHUNK));
 
-  // Fetch the WAN subtree AND the ManagementServer connection-request URL — the latter
-  // embeds the device's current WAN IP and is present/fresh for every ONU that informs,
-  // even when the WANConnection.ExternalIPAddress params aren't populated.
-  const res = await fetch(
-    devicesUrl(genieacsUrl, {
-      query,
-      projection: "_id,InternetGatewayDevice.WANDevice,InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
+  await Promise.all(
+    chunks.map(async (batch) => {
+      const query = { _id: { $regex: batch.map(esc).join("|") } };
+      const res = await fetch(devicesUrl(genieacsUrl, { query, projection })).catch(() => null);
+      if (!res || !res.ok) return; // skip a failed batch, keep the rest
+      const devices = (await res.json()) as GenieDevice[];
+      for (const d of devices) {
+        const id = String(d._id ?? "").toUpperCase();
+        const matchedSerial = batch.find((sn) => id.includes(sn));
+        if (!matchedSerial || result.has(matchedSerial)) continue;
+        const ip = extractWanIp(d);
+        if (ip) result.set(matchedSerial, ip);
+      }
     })
   );
-  if (!res.ok) throw new Error(`GenieACS /devices dështoi: ${res.status}`);
-  const devices = (await res.json()) as GenieDevice[];
-
-  for (const d of devices) {
-    const id = String(d._id ?? "").toUpperCase();
-    const matchedSerial = wanted.find((sn) => id.includes(sn));
-    if (!matchedSerial || result.has(matchedSerial)) continue;
-    const ip = extractWanIp(d);
-    if (ip) result.set(matchedSerial, ip);
-  }
   return result;
 }
 
