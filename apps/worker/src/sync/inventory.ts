@@ -26,7 +26,7 @@ export async function syncOltInventory(oltId: number): Promise<number> {
       // via `show onu unauthentication` and merge into the same list (MAC as serial).
       const eponUncfg = olt.eponSlots.length ? await scanEponUnauthenticated(creds) : [];
       return { rows: [...gponRows, ...eponRows], uncfg: [...uncfg, ...eponUncfg] };
-    });
+    }, { maxWaitMs: 5000 });
 
     await batchUpsertOnus(
       olt.id,
@@ -40,7 +40,9 @@ export async function syncOltInventory(oltId: number): Promise<number> {
     await prisma.olt.update({ where: { id: olt.id }, data: { status: "online", lastSync: new Date() } });
     return rows.length;
   } catch (err) {
-    if (err instanceof OltBusyError) return 0; // a provision/detail job is already using this OLT — skip this tick
+    // Busy = another sweep owns the OLT; propagate so the worker re-enqueues soon instead
+    // of skipping a whole interval, and don't mark the OLT offline (it's reachable).
+    if (err instanceof OltBusyError) throw err;
     await prisma.olt.update({ where: { id: olt.id }, data: { status: "offline" } });
     throw err;
   }
@@ -61,9 +63,9 @@ export async function syncOltDetail(oltId: number): Promise<number> {
         ? await scanEponInventory(creds, olt.eponSlots, DEFAULT_EPON_PORTS_PER_SLOT)
         : [];
       return [...gpon, ...epon];
-    });
+    }, { maxWaitMs: 5000 });
   } catch (err) {
-    if (err instanceof OltBusyError) return 0; // skip this tick, another job owns the OLT session right now
+    if (err instanceof OltBusyError) throw err; // propagate → worker re-enqueues soon
     throw err;
   }
 

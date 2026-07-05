@@ -14,9 +14,9 @@ export async function syncOltSignals(oltId: number): Promise<number> {
 
   let signals;
   try {
-    signals = await withOltLock(olt.id, () => scanOltSignals(toCreds(olt), onus.map((o) => o.ponPort)));
+    signals = await withOltLock(olt.id, () => scanOltSignals(toCreds(olt), onus.map((o) => o.ponPort)), { maxWaitMs: 5000 });
   } catch (err) {
-    if (err instanceof OltBusyError) return 0; // skip this tick, another job owns the OLT session right now
+    if (err instanceof OltBusyError) throw err; // propagate → worker re-enqueues soon (avoids 5-min starvation)
     throw err;
   }
   let written = 0;
