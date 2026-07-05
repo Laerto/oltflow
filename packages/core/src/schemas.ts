@@ -21,6 +21,7 @@ export const createOltSchema = z.object({
   model: z.string().optional(),
   slots: z.array(z.number().int().positive()).optional(),
   eponSlots: z.array(z.number().int().positive()).optional(),
+  snmpCommunity: z.string().optional(),
 });
 
 export const updateOltSchema = z.object({
@@ -35,6 +36,7 @@ export const updateOltSchema = z.object({
   model: z.string().optional(),
   slots: z.array(z.number().int().positive()).optional(),
   eponSlots: z.array(z.number().int().positive()).optional(),
+  snmpCommunity: z.string().optional(),
 });
 
 export const authorizeOnuSchema = z.object({

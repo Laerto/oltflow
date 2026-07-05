@@ -41,6 +41,7 @@ export async function GET() {
       username: olt.username,
       slots: olt.slots,
       eponSlots: olt.eponSlots,
+      snmpCommunity: olt.snmpCommunity,
       location: olt.location,
       status: olt.status,
       lastSync: olt.lastSync,
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       model: input.model,
       slots: input.slots,
       eponSlots: input.eponSlots,
+      snmpCommunity: input.snmpCommunity || undefined,
     },
   });
 

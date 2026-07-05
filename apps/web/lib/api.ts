@@ -27,6 +27,7 @@ export interface OltSummary {
   username: string;
   slots: number[];
   eponSlots: number[];
+  snmpCommunity: string | null;
   location: string | null;
   status: string;
   lastSync: string | null;

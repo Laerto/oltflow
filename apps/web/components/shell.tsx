@@ -87,6 +87,7 @@ function AddOltModal({
   const [location, setLocation] = useState("");
   const [slots, setSlots] = useState("4,15,17,19,20");
   const [eponSlots, setEponSlots] = useState("");
+  const [snmpCommunity, setSnmpCommunity] = useState("public");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -108,6 +109,7 @@ function AddOltModal({
         location,
         slots: parseSlots(slots),
         eponSlots: parseSlots(eponSlots),
+        snmpCommunity: snmpCommunity.trim() || "public",
       });
       setSuccess("OLT u shtua, duke testuar lidhjen...");
       await onCreated();
@@ -240,6 +242,15 @@ function AddOltModal({
                   value={eponSlots}
                   onChange={(e) => setEponSlots(e.target.value)}
                   placeholder="9,14"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="snmpCommunity">SNMP Community</Label>
+                <Input
+                  id="snmpCommunity"
+                  value={snmpCommunity}
+                  onChange={(e) => setSnmpCommunity(e.target.value)}
+                  placeholder="public"
                 />
               </div>
             </div>

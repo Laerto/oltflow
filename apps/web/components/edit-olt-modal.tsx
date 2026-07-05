@@ -43,6 +43,7 @@ export function EditOltModal({
   const [location, setLocation] = useState(olt.location ?? "");
   const [slots, setSlots] = useState(olt.slots.join(","));
   const [eponSlots, setEponSlots] = useState(olt.eponSlots.join(","));
+  const [snmpCommunity, setSnmpCommunity] = useState(olt.snmpCommunity ?? "public");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,6 +65,7 @@ export function EditOltModal({
         location,
         slots: parseSlots(slots),
         eponSlots: parseSlots(eponSlots),
+        snmpCommunity: snmpCommunity.trim(),
       });
       setSuccess("U ruajt — sinkronizimi i ardhshëm do përdorë slot-et e reja (deri në 60s).");
       await onSaved();
@@ -145,6 +147,10 @@ export function EditOltModal({
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Slot-et EPON (ETTO) — opsionale</Label>
               <Input value={eponSlots} onChange={(e) => setEponSlots(e.target.value)} placeholder="9,14" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">SNMP Community</Label>
+              <Input value={snmpCommunity} onChange={(e) => setSnmpCommunity(e.target.value)} placeholder="public" />
             </div>
           </div>
 
