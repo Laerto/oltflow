@@ -117,7 +117,7 @@ function FilterBox({ label, color, children }: { label: string; color: keyof typ
   return (
     <div className={`flex items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
       <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide ${BOX_LABEL[color]}`}>{label}</span>
-      <div className="flex flex-wrap items-center gap-1">{children}</div>
+      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
     </div>
   );
 }
@@ -126,7 +126,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition sm:px-3 sm:py-1 sm:text-xs ${
+      type="button"
+      className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-medium transition sm:py-1 sm:text-xs ${
         active
           ? "border-primary bg-primary/15 text-primary"
           : "border-border bg-card text-muted-foreground hover:text-foreground"
@@ -162,9 +163,10 @@ function SignalChip({
   return (
     <button
       onClick={onClick}
-      className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${active ? tone.active : `bg-card ${tone.idle}`}`}
+      type="button"
+      className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold transition sm:py-1 sm:text-xs ${active ? tone.active : `bg-card ${tone.idle}`}`}
     >
-      <Icon className="hidden h-3.5 w-3.5 sm:inline" /> {label}
+      <Icon className="h-3.5 w-3.5" /> {label}
     </button>
   );
 }
