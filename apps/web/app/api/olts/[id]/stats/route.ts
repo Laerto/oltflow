@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@oltflow/db";
+import { prisma, Prisma } from "@oltflow/db";
+import { SIGNAL_THRESHOLDS } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
 import { guardOltAccess } from "@/lib/olt-access";
 
@@ -16,22 +17,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   // Anyone expired long ago (months/years) has left the network — exclude them.
   const graceStart = new Date(now - 14 * 24 * 60 * 60 * 1000);
 
-  const [stateGroups, recentSignals, expiringList] = await Promise.all([
+  const [stateGroups, signalRows, expiringList] = await Promise.all([
     // One grouped pass over [oltId, state] (indexed) gives total, online, and the
     // offline-reason split shown on the dashboard cards. State strings come straight
     // from the OLT and vary in case (e.g. "OffLine" vs "Offline"), so compare lower-cased.
     prisma.onu.groupBy({ by: ["state"], where: { oltId }, _count: { _all: true } }),
-    // Both signal levels in one pass; distinct per ONU so an ONU logging several rows in
-    // the window is counted once. Served by the new [signalLevel, recordedAt] index.
-    prisma.signal.findMany({
-      where: {
-        signalLevel: { in: ["warning", "critical"] },
-        recordedAt: { gt: new Date(Date.now() - 10 * 60 * 1000) },
-        onu: { oltId },
-      },
-      select: { onuId: true, signalLevel: true },
-      distinct: ["onuId", "signalLevel"],
-    }),
+    // Low-signal counts from each working ONU's LATEST sample (not a fixed time window):
+    // on large OLTs the signal sweep can lag >10min, which used to make the dashboard show
+    // 0 low signals while the ONU list (which reads the latest sample) showed plenty. Bands
+    // use the single-source thresholds from @oltflow/core, matching classifySignal.
+    prisma.$queryRaw<{ warning: bigint; critical: bigint }[]>(Prisma.sql`
+      WITH latest AS (
+        SELECT DISTINCT ON (s."onuId") s."onuRx" AS rx
+        FROM "Signal" s
+        JOIN "Onu" o ON o.id = s."onuId"
+        WHERE o."oltId" = ${oltId} AND o.state = 'working' AND s."onuRx" IS NOT NULL
+        ORDER BY s."onuId", s."recordedAt" DESC
+      )
+      SELECT
+        count(*) FILTER (WHERE rx < ${SIGNAL_THRESHOLDS.warning}) AS critical,
+        count(*) FILTER (WHERE rx >= ${SIGNAL_THRESHOLDS.warning} AND rx < ${SIGNAL_THRESHOLDS.good}) AS warning
+      FROM latest
+    `),
     // Clients whose RADIUS subscription has expired or expires within 7 days — the
     // office works this list daily to call people in to pay. Soonest (most overdue) first.
     prisma.onu.findMany({
@@ -65,8 +72,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     pwrFail,
     los,
     naOffline: offline - pwrFail - los,
-    criticalSignal: recentSignals.filter((s) => s.signalLevel === "critical").length,
-    warningSignal: recentSignals.filter((s) => s.signalLevel === "warning").length,
+    criticalSignal: Number(signalRows[0]?.critical ?? 0),
+    warningSignal: Number(signalRows[0]?.warning ?? 0),
     expiring: expiringList.map((o) => ({
       id: o.id,
       name: o.name,
