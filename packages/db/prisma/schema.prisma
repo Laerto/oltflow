@@ -35,7 +35,48 @@ model Olt {
   ponTraffic  PonTraffic[]
   users       User[]    @relation("UserOlts") // support/viewer scoping (empty = all; admin ignores)
   tickets     Ticket[]
+  splitters   Splitter[]
+  fiberSegments FiberSegment[]
   createdAt   DateTime  @default(now())
+}
+
+/// A PON splitter node in the ODN (fiber distribution). Splitters cascade (primary →
+/// secondary) via parentSplitterId; a top-level one hangs off an OLT PON port. Powers the
+/// network-map topology and (later) blast-radius fault isolation.
+model Splitter {
+  id               Int        @id @default(autoincrement())
+  name             String
+  ratio            String     @default("1:8") // 1:2 | 1:4 | 1:8 | 1:16 | 1:32 | 1:64
+  latitude         Float
+  longitude        Float
+  oltId            Int?
+  olt              Olt?       @relation(fields: [oltId], references: [id], onDelete: SetNull)
+  ponPort          String?    // OLT PON port it feeds from, e.g. gpon-olt_1/1/1 (for top-level)
+  parentSplitterId Int?
+  parent           Splitter?  @relation("SplitterTree", fields: [parentSplitterId], references: [id], onDelete: SetNull)
+  children         Splitter[] @relation("SplitterTree")
+  onus             Onu[]
+  note             String?
+  createdAt        DateTime   @default(now())
+
+  @@index([oltId])
+}
+
+/// A fiber run drawn on the map: backbone / distribution / drop. `path` is the route as an
+/// array of [lat,lng] points. Kept geometry-only (not FK-linked to endpoints) so the plant
+/// can be sketched fast; nodes (OLT/splitter/ONU) are matched visually by proximity.
+model FiberSegment {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  kind      String   @default("distribution") // backbone | distribution | drop
+  path      Json     // [[lat,lng], ...]
+  oltId     Int?
+  olt       Olt?     @relation(fields: [oltId], references: [id], onDelete: SetNull)
+  cores     Int?
+  lengthM   Int?     // route length in meters (computed client-side or manual)
+  createdAt DateTime @default(now())
+
+  @@index([oltId])
 }
 
 /// Unconfigured (waiting-authorization) ONUs, persisted from each inventory sync so the
@@ -76,6 +117,8 @@ model Onu {
   expiration     DateTime? // client account expiry from RADIUS Manager (rm_users), filled by the worker
   latitude       Float? // customer/ONU geolocation for the network map (set at install or manually)
   longitude      Float?
+  splitterId     Int? // ODN: which splitter port feeds this ONU (for topology + fault isolation)
+  splitter       Splitter? @relation(fields: [splitterId], references: [id], onDelete: SetNull)
   lastSeen       DateTime?
   signals        Signal[]
   tickets        Ticket[]

@@ -36,6 +36,11 @@ const RULES: Rule[] = [
   { re: /^\/users(\/|$)/, tier: TIER.ADMIN }, // Users admin page
   // ── OPERATE (support + admin) ────────────────────────────────────────────
   { method: "GET", re: /^\/api\/technicians$/, tier: TIER.OPERATE }, // technician list for assign
+  { method: "POST", re: /^\/api\/splitters$/, tier: TIER.OPERATE }, // ODN plant editing
+  { method: "PATCH", re: /^\/api\/splitters\/\d+$/, tier: TIER.OPERATE },
+  { method: "DELETE", re: /^\/api\/splitters\/\d+$/, tier: TIER.OPERATE },
+  { method: "POST", re: /^\/api\/fiber$/, tier: TIER.OPERATE },
+  { method: "DELETE", re: /^\/api\/fiber\/\d+$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/tickets$/, tier: TIER.OPERATE }, // open a ticket
   { method: "PATCH", re: /^\/api\/tickets\/\d+$/, tier: TIER.OPERATE }, // (re)assign technician
   // NOTE: GET /api/tickets(/id) + POST /api/tickets/id/action ⇒ VIEW default; the routes do

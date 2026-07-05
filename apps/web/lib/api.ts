@@ -110,9 +110,17 @@ export const api = {
   updateUser: (id: number, input: { name?: string; role?: string; password?: string; oltIds?: number[]; telegramChatId?: string }) =>
     request<{ user: UserRow }>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   listTechnicians: () => request<{ technicians: { id: number; name: string | null; email: string }[] }>("/api/technicians"),
-  mapData: () => request<{ olts: MapOlt[]; onus: MapOnu[] }>("/api/map"),
+  mapData: () => request<{ olts: MapOlt[]; onus: MapOnu[]; splitters: MapSplitter[]; fiber: MapFiber[] }>("/api/map"),
   setOnuLocation: (id: number, latitude: number | null, longitude: number | null) =>
     request<{ ok: boolean }>(`/api/onus/${id}`, { method: "PATCH", body: JSON.stringify({ latitude, longitude }) }),
+  createSplitter: (input: Record<string, unknown>) =>
+    request<{ splitter: { id: number } }>("/api/splitters", { method: "POST", body: JSON.stringify(input) }),
+  updateSplitter: (id: number, input: Record<string, unknown>) =>
+    request<{ splitter: { id: number } }>(`/api/splitters/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  deleteSplitter: (id: number) => request<{ ok: boolean }>(`/api/splitters/${id}`, { method: "DELETE" }),
+  createFiber: (input: Record<string, unknown>) =>
+    request<{ fiber: { id: number } }>("/api/fiber", { method: "POST", body: JSON.stringify(input) }),
+  deleteFiber: (id: number) => request<{ ok: boolean }>(`/api/fiber/${id}`, { method: "DELETE" }),
   deleteUser: (id: number) => request<{ ok: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
   // ── Tickets (fault repair) ──
   listTickets: (status?: string) => request<{ tickets: TicketRow[] }>(`/api/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`),
@@ -188,8 +196,30 @@ export interface MapOnu {
   lat: number;
   lng: number;
   state: string | null;
+  splitterId: number | null;
   onuRx: number | null;
   band: string; // good | warning | critical | offline | unknown
+}
+export interface MapSplitter {
+  id: number;
+  name: string;
+  ratio: string;
+  lat: number;
+  lng: number;
+  oltId: number | null;
+  ponPort: string | null;
+  parentSplitterId: number | null;
+  note: string | null;
+  used: number; // ONUs attached
+}
+export interface MapFiber {
+  id: number;
+  name: string | null;
+  kind: string; // backbone | distribution | drop
+  path: [number, number][];
+  oltId: number | null;
+  cores: number | null;
+  lengthM: number | null;
 }
 
 export interface OltPort {

@@ -13,7 +13,10 @@ export async function GET() {
   const oltFilter = allowed === "all" ? {} : { id: { in: allowed } };
   const onuFilter = { latitude: { not: null }, ...(allowed === "all" ? {} : { oltId: { in: allowed } }) };
 
-  const [olts, onus] = await Promise.all([
+  // Splitters/fiber can be unassigned to an OLT (oltId null) — scoped users still see those.
+  const infraFilter = allowed === "all" ? {} : { OR: [{ oltId: { in: allowed } }, { oltId: null }] };
+
+  const [olts, onus, splitters, fiber] = await Promise.all([
     prisma.olt.findMany({
       where: oltFilter,
       select: { id: true, name: true, latitude: true, longitude: true, status: true, location: true },
@@ -28,8 +31,17 @@ export async function GET() {
         latitude: true,
         longitude: true,
         state: true,
+        splitterId: true,
         signals: { orderBy: { recordedAt: "desc" }, take: 1, select: { onuRx: true } },
       },
+    }),
+    prisma.splitter.findMany({
+      where: infraFilter,
+      select: { id: true, name: true, ratio: true, latitude: true, longitude: true, oltId: true, ponPort: true, parentSplitterId: true, note: true, _count: { select: { onus: true } } },
+    }),
+    prisma.fiberSegment.findMany({
+      where: infraFilter,
+      select: { id: true, name: true, kind: true, path: true, oltId: true, cores: true, lengthM: true },
     }),
   ]);
 
@@ -47,9 +59,23 @@ export async function GET() {
         lat: o.latitude,
         lng: o.longitude,
         state: o.state,
+        splitterId: o.splitterId,
         onuRx: rx,
         band: o.state === "working" ? classifySignal(rx) : "offline",
       };
     }),
+    splitters: splitters.map((s) => ({
+      id: s.id,
+      name: s.name,
+      ratio: s.ratio,
+      lat: s.latitude,
+      lng: s.longitude,
+      oltId: s.oltId,
+      ponPort: s.ponPort,
+      parentSplitterId: s.parentSplitterId,
+      note: s.note,
+      used: s._count.onus,
+    })),
+    fiber: fiber.map((f) => ({ id: f.id, name: f.name, kind: f.kind, path: f.path, oltId: f.oltId, cores: f.cores, lengthM: f.lengthM })),
   });
 }
