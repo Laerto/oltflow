@@ -106,17 +106,12 @@ const BOX_BORDER: Record<string, string> = {
   amber: "border-amber-400/60",
   blue: "border-blue-400/50",
 };
-const BOX_LABEL: Record<string, string> = {
-  slate: "text-slate-500",
-  indigo: "text-indigo-600",
-  amber: "text-amber-600",
-  blue: "text-blue-600",
-};
-
+// The visible group labels (STATUS/TIPI/SIGNAL) are dropped — the chips + colored icons are
+// self-explanatory to the staff and the text just wasted space. `label` stays as an
+// aria-label so the groups are still announced to screen readers.
 function FilterBox({ label, color, children }: { label: string; color: keyof typeof BOX_BORDER; children: React.ReactNode }) {
   return (
-    <div className={`flex items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
-      <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide ${BOX_LABEL[color]}`}>{label}</span>
+    <div aria-label={label} className={`flex items-center gap-1.5 rounded-lg border bg-card px-2 py-1.5 shadow-sm ${BOX_BORDER[color]}`}>
       <div className="flex flex-wrap items-center gap-1.5">{children}</div>
     </div>
   );
