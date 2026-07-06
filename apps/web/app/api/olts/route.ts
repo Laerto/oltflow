@@ -90,13 +90,9 @@ export async function POST(request: Request) {
 
   const jobId = await enqueueJob(JOB_NAMES.oltConnectTest, { oltId: olt.id }, { oltId: olt.id });
 
-  // Kick the first inventory/detail/signal sweep right now so the new OLT populates within
-  // seconds. Previously these ran only on the next scheduler tick, so a freshly-added OLT
-  // showed zero ONUs until the worker next restarted (which forced an immediate tick). The
-  // delays stagger the sweeps behind the connect-test so they don't fight over the OLT lock.
-  await enqueueUntracked(JOB_NAMES.syncInventory, { oltId: olt.id }, 2_000);
-  await enqueueUntracked(JOB_NAMES.syncSignals, { oltId: olt.id }, 4_000);
-  await enqueueUntracked(JOB_NAMES.syncDetail, { oltId: olt.id }, 6_000);
+  // Kick the first combined sweep right now so the new OLT populates within seconds (state +
+  // signal + detail all run since nothing is "due" yet), instead of waiting the next tick.
+  await enqueueUntracked(JOB_NAMES.syncOlt, { oltId: olt.id }, 2_000);
 
   return NextResponse.json({ olt: { id: olt.id, name: olt.name, ip: olt.ip }, jobId }, { status: 201 });
 }

@@ -15,3 +15,17 @@ export function enqueue(name: string, data: Record<string, unknown>, jobRowId?: 
     { jobId: jobRowId, removeOnComplete: 200, removeOnFail: 500, delay: delayMs }
   );
 }
+
+/**
+ * Enqueue a deduplicated per-OLT sync. The fixed jobId (`sync-olt:<oltId>`) + immediate
+ * removal means at most ONE sync job per OLT is ever waiting/active — a scheduler tick that
+ * fires while the previous sweep is still running is a no-op instead of piling up. This is
+ * what keeps the queue tiny and stops user commands from starving behind a backlog.
+ */
+export function enqueueOltSync(name: string, oltId: number, delayMs?: number) {
+  return queue.add(
+    name,
+    { oltId },
+    { jobId: `${name}-${oltId}`, removeOnComplete: true, removeOnFail: true, delay: delayMs }
+  );
+}

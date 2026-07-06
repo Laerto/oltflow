@@ -4,10 +4,7 @@ import { JOB_NAMES, QUEUE_NAME, sanitizePayload } from "@oltflow/core";
 import { connection } from "./redis.js";
 import { writeAudit } from "./audit.js";
 import { startScheduler } from "./scheduler.js";
-import { enqueue } from "./queue.js";
-import { OltBusyError } from "./olt-lock.js";
-import { syncOltInventory, syncOltDetail } from "./sync/inventory.js";
-import { syncOltSignals } from "./sync/signals.js";
+import { syncOlt } from "./sync/olt-sync.js";
 import { handleOltConnectTest } from "./handlers/oltConnectTest.js";
 import { handleScanUnconfigured } from "./handlers/scanUnconfigured.js";
 import { handleRefreshOnu } from "./handlers/refreshOnu.js";
@@ -47,28 +44,17 @@ const HANDLERS: Record<string, Handler> = {
   [JOB_NAMES.rebootOnuCli]: handleRebootOnuCli,
 };
 
-// Untracked: driven by the scheduler, no Job row / AuditLog (would flood both).
+// Untracked: driven by the scheduler, no Job row / AuditLog (would flood both). One combined,
+// deduped sweep per OLT — it self-skips (returns 0) when the OLT is busy with a user action,
+// so nothing is re-enqueued and the queue never piles up.
 const UNTRACKED_HANDLERS: Record<string, (payload: { oltId: number }) => Promise<unknown>> = {
-  [JOB_NAMES.syncInventory]: (p) => syncOltInventory(p.oltId),
-  [JOB_NAMES.syncDetail]: (p) => syncOltDetail(p.oltId),
-  [JOB_NAMES.syncSignals]: (p) => syncOltSignals(p.oltId),
+  [JOB_NAMES.syncOlt]: (p) => syncOlt(p.oltId),
 };
 
 async function processJob(job: BullJob) {
   const untracked = UNTRACKED_HANDLERS[job.name];
   if (untracked) {
-    try {
-      return await untracked(job.data);
-    } catch (err) {
-      // The OLT was locked by a longer sweep (e.g. a multi-minute detail pass on a big OLT).
-      // Re-enqueue this sync in ~20-40s instead of waiting the full scheduler interval —
-      // otherwise signals/detail can starve for many minutes on large OLTs.
-      if (err instanceof OltBusyError) {
-        await enqueue(job.name, { oltId: (job.data as { oltId: number }).oltId }, undefined, 20_000 + Math.floor(Math.random() * 20_000));
-        return { skipped: "busy" };
-      }
-      throw err;
-    }
+    return untracked(job.data);
   }
 
   const handler = HANDLERS[job.name];

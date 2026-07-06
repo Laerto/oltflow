@@ -1,6 +1,6 @@
 import { prisma } from "@oltflow/db";
 import { JOB_NAMES } from "@oltflow/core";
-import { enqueue } from "./queue.js";
+import { enqueueOltSync } from "./queue.js";
 import { kv, WORKER_HEARTBEAT_KEY } from "./kv.js";
 import { syncRadius } from "./sync/radius.js";
 import { checkAlarms } from "./sync/alarms.js";
@@ -23,24 +23,13 @@ function jitter(intervalMs: number): number {
   return Math.floor(Math.random() * Math.min(intervalMs / 4, 15_000));
 }
 
-async function tickInventory() {
+/** One combined, deduped sync per OLT every tick. The sync itself decides which passes are
+ * due (state always, signal ~5min, detail ~15min) and runs them under a single lock — so the
+ * three passes never fight each other and, thanks to the fixed jobId, nothing piles up. */
+async function tickSync() {
   const olts = await prisma.olt.findMany({ select: { id: true } });
   for (const olt of olts) {
-    await enqueue(JOB_NAMES.syncInventory, { oltId: olt.id }, undefined, jitter(SYNC_INTERVAL_MS));
-  }
-}
-
-async function tickDetail() {
-  const olts = await prisma.olt.findMany({ select: { id: true } });
-  for (const olt of olts) {
-    await enqueue(JOB_NAMES.syncDetail, { oltId: olt.id }, undefined, jitter(DETAIL_INTERVAL_MS));
-  }
-}
-
-async function tickSignals() {
-  const olts = await prisma.olt.findMany({ select: { id: true } });
-  for (const olt of olts) {
-    await enqueue(JOB_NAMES.syncSignals, { oltId: olt.id }, undefined, jitter(SIGNAL_INTERVAL_MS));
+    await enqueueOltSync(JOB_NAMES.syncOlt, olt.id, jitter(SYNC_INTERVAL_MS));
   }
 }
 
@@ -88,15 +77,13 @@ async function tickPrune() {
 }
 
 export function startScheduler() {
-  loop(tickInventory, SYNC_INTERVAL_MS, "sync-inventory");
-  loop(tickDetail, DETAIL_INTERVAL_MS, "sync-detail");
-  loop(tickSignals, SIGNAL_INTERVAL_MS, "sync-signals");
+  loop(tickSync, SYNC_INTERVAL_MS, "sync-olt");
   loop(tickRadius, RADIUS_INTERVAL_MS, "sync-radius");
   loop(tickAlarms, ALARM_INTERVAL_MS, "alarms");
   loop(tickPonTraffic, PON_TRAFFIC_INTERVAL_MS, "pon-traffic");
   loop(tickPrune, PRUNE_INTERVAL_MS, "prune");
   loop(tickHeartbeat, HEARTBEAT_INTERVAL_MS, "heartbeat");
   console.log(
-    `[scheduler] inventory ${SYNC_INTERVAL_MS}ms, detail ${DETAIL_INTERVAL_MS}ms, signals ${SIGNAL_INTERVAL_MS}ms, radius ${RADIUS_INTERVAL_MS}ms, alarms ${ALARM_INTERVAL_MS}ms, pon-traffic ${PON_TRAFFIC_INTERVAL_MS}ms, prune ${PRUNE_INTERVAL_MS}ms`
+    `[scheduler] sync ${SYNC_INTERVAL_MS}ms (signal ${SIGNAL_INTERVAL_MS}ms, detail ${DETAIL_INTERVAL_MS}ms), radius ${RADIUS_INTERVAL_MS}ms, alarms ${ALARM_INTERVAL_MS}ms, pon-traffic ${PON_TRAFFIC_INTERVAL_MS}ms, prune ${PRUNE_INTERVAL_MS}ms`
   );
 }

@@ -16,6 +16,7 @@ export const JOB_NAMES = {
   pushAcs: "push-acs",
   rebootOnu: "reboot-onu",
   rebootOnuCli: "reboot-onu-cli",
+  syncOlt: "sync-olt", // combined per-OLT sweep (state + signal + detail), one deduped job/OLT
   syncInventory: "sync-inventory",
   syncDetail: "sync-detail",
   syncSignals: "sync-signals",
