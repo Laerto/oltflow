@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ONU_TYPES, TCONT_PROFILES, DEFAULT_VLAN_ID, DEFAULT_ONU_TYPE, DEFAULT_TCONT_PROFILE } from "@oltflow/core";
+import { ONU_TYPES, TCONT_PROFILES, DEFAULT_VLAN_ID, DEFAULT_TCONT_PROFILE, ROUTE_ONU_TYPE, BRIDGE_ONU_TYPE, onuConnectionKind } from "@oltflow/core";
 
 export function ProvisionModal({
   open,
@@ -38,7 +38,8 @@ export function ProvisionModal({
   onDone?: () => void;
 }) {
   const [name, setName] = useState("");
-  const [onuType, setOnuType] = useState<string>(DEFAULT_ONU_TYPE);
+  // Default to the route primary (F673); the operator flips to Bridge (F612) in one tap.
+  const [onuType, setOnuType] = useState<string>(ROUTE_ONU_TYPE);
   const [tcontProfile, setTcontProfile] = useState<string>(DEFAULT_TCONT_PROFILE);
   const [vlanId, setVlanId] = useState(String(DEFAULT_VLAN_ID));
   const [pppoeUser, setPppoeUser] = useState("");
@@ -103,13 +104,35 @@ export function ProvisionModal({
           </div>
 
           <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Informacioni ONU</div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Lloji i lidhjes</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {([["route", "Route", ROUTE_ONU_TYPE], ["bridge", "Bridge", BRIDGE_ONU_TYPE]] as const).map(([k, label, type]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setOnuType(type)}
+                  className={`flex flex-col items-start rounded-lg border px-3 py-2 text-left transition ${
+                    onuConnectionKind(onuType) === k
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span className="text-sm font-semibold">{label}</span>
+                  <span className="font-mono text-[10px] opacity-80">{type}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Emri Klientit *</Label>
               <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="KLIENTI EMRI MBIEMRI" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase text-muted-foreground">Tipi ONU</Label>
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Modeli ONU</Label>
               <Select value={onuType} onValueChange={setOnuType}>
                 <SelectTrigger>
                   <SelectValue />

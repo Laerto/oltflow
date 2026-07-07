@@ -1,6 +1,7 @@
 // Ported verbatim from frontend/index.html selects + main.py defaults.
 export const ONU_TYPES = [
-  "F673AV9V9.0",
+  "F673AV9V9.0", // route primary (see ROUTE_ONU_TYPE)
+  "F612V6.0", // bridge primary (see BRIDGE_ONU_TYPE)
   "F660",
   "F660V6.0",
   "F670L",
@@ -8,6 +9,14 @@ export const ONU_TYPES = [
   "ZTE-F660",
   "F6600PV9.0.12",
 ] as const;
+
+/** Primary models the office authorizes with, keyed by how the customer runs the ONU. The
+ * provision form offers a Route/Bridge choice and pre-selects these, so the common case is
+ * one tap with no scrolling — the model can't be read off the OLT before authorization, but
+ * the operator always knows whether it's a routed CPE or a bridge to the customer's router.
+ * Both are the exact OLT-reported type strings and dominate the live fleet. */
+export const ROUTE_ONU_TYPE: (typeof ONU_TYPES)[number] = "F673AV9V9.0";
+export const BRIDGE_ONU_TYPE: (typeof ONU_TYPES)[number] = "F612V6.0";
 
 export const TCONT_PROFILES = ["SMARTOLT-1G-UP", "1G", "100Mbs"] as const;
 
