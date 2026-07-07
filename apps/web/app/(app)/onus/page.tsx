@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { RefreshCw, Search, Eye, Lock, Trash2, MoreVertical, Rows3, Rows4, RotateCw, Download, X, SignalHigh, SignalMedium, SignalLow, Cpu } from "lucide-react";
+import { RefreshCw, Search, Eye, Lock, Trash2, MoreVertical, Rows3, Rows4, RotateCw, Download, X, SignalHigh, SignalMedium, SignalLow } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SignalPill } from "@/components/signal-pill";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
@@ -205,7 +204,6 @@ function OnusContent() {
     urlFilter === "online" || urlFilter === "offline" ? urlFilter : "all"
   );
   const [brFilter, setBrFilter] = useState<BrFilter>("all");
-  const [modelFilter, setModelFilter] = useState<string>("all");
   const [signalBand, setSignalBand] = useState<SignalBand>(
     urlSignal === "good" || urlSignal === "warning" || urlSignal === "critical" ? urlSignal : "all"
   );
@@ -275,13 +273,10 @@ function OnusContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOlt?.id, searching]);
 
-  const models = Array.from(new Set(onus.map((o) => o.type).filter(Boolean) as string[])).sort();
-
   const base = onus
     .filter((o) => statusFilter === "all" || (statusFilter === "online" ? o.state === "working" : o.state !== "working"))
     .filter((o) => urlFilter !== "low-signal" || isLowSignal(o.onuRx))
     .filter((o) => brFilter === "all" || onuConnectionKind(o.type) === brFilter)
-    .filter((o) => modelFilter === "all" || o.type === modelFilter)
     // Optical signal band filter: good / warning / critical (near LOSS).
     .filter((o) => signalBand === "all" || classifySignal(o.onuRx) === signalBand)
     .filter((o) => `${o.ponPort}${o.serial ?? ""}${o.name ?? ""}${o.type ?? ""}`.toLowerCase().includes(search.toLowerCase()));
@@ -342,9 +337,9 @@ function OnusContent() {
             </Button>
           </div>
         </div>
-        {/* Search + model filter row (model lives here, not among the chip filters). */}
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative sm:max-w-sm sm:flex-1">
+        {/* Search row */}
+        <div className="mt-3">
+          <div className="relative sm:max-w-sm">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
@@ -353,20 +348,6 @@ function OnusContent() {
               className="w-full pl-9 font-mono"
             />
           </div>
-          {models.length > 1 && (
-            <Select value={modelFilter} onValueChange={setModelFilter}>
-              <SelectTrigger className="h-9 w-full gap-2 text-xs sm:w-52">
-                <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
-                <SelectValue placeholder="Të gjithë modelet" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Të gjithë modelet</SelectItem>
-                {models.map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
         </div>
       </div>
 
