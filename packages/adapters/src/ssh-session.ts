@@ -1,5 +1,5 @@
 import { Client, type ClientChannel } from "ssh2";
-import type { CliSession } from "./cli-session.js";
+import { assertSingleCliLine, type CliSession } from "./cli-session.js";
 
 /**
  * Interactive-shell SSH session matching the CliSession contract used by
@@ -86,6 +86,7 @@ export class SshSession implements CliSession {
   }
 
   write(data: string) {
+    assertSingleCliLine(data);
     if (!this.closed) this.channel.write(data + "\n");
   }
 

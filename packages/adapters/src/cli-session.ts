@@ -12,3 +12,16 @@ export interface CliSession {
   sendCommand(cmd: string, delayMs?: number): Promise<string>;
   close(): void;
 }
+
+/**
+ * Catch-all guard against CLI command injection into the OLT. Every command is built and
+ * sent one-per-line — the transport appends the single trailing "\n" itself — so a value
+ * arriving here with an embedded newline/CR means untrusted input leaked through the schema
+ * layer and would be split by the OLT into extra commands. Refuse to send it. Field-level
+ * validation (see @oltflow/core schemas) is the first line; this is the last.
+ */
+export function assertSingleCliLine(data: string): void {
+  if (/[\r\n]/.test(data)) {
+    throw new Error("Komandë CLI e pavlefshme: përmban karakter rreshti të ri (injektim i mundshëm)");
+  }
+}

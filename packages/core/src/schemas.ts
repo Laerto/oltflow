@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ONU_TYPES, TCONT_PROFILES, DEFAULT_VLAN_ID, DEFAULT_ONU_NAME, DEFAULT_TRAFFIC_PROFILE, DEFAULT_EPON_VLAN_ID } from "./onu-constants.js";
+import { ONU_TYPES, TCONT_PROFILES, EPON_ONU_TYPES, DEFAULT_VLAN_ID, DEFAULT_ONU_NAME, DEFAULT_TRAFFIC_PROFILE, DEFAULT_EPON_VLAN_ID } from "./onu-constants.js";
 
 export const ponPortString = z
   .string()
@@ -8,6 +8,30 @@ export const ponPortString = z
 export const eponPonPortString = z
   .string()
   .regex(/^epon-onu_\d+\/\d+\/\d+:\d+$/, "Format: epon-onu_1/2/3:1");
+
+// ── CLI-safe field validators ────────────────────────────────────────────────
+// Every field below is interpolated verbatim into a ZTE CLI command that the worker sends
+// to the OLT one-command-per-line (see @oltflow/adapters). A newline/CR embedded in a value
+// would be split by the OLT into EXTRA commands — command injection into live network gear.
+// So each CLI-bound field is constrained here: structured tokens get a strict allow-list;
+// free-text fields at minimum forbid whitespace/control chars (\p{Cc} = all control chars,
+// which includes \n \r \t). The CLI transport enforces a second, catch-all layer that refuses
+// any command containing a newline (assertSingleCliLine in @oltflow/adapters).
+
+/** ONU serial: hex/alnum plus dot & dash (e.g. ZTEGCF1234, ZTEG.C0FF.EE01). No whitespace. */
+const onuSerialField = z.string().trim().min(1).max(32).regex(/^[A-Za-z0-9.\-]+$/, "Serial i pavlefshëm");
+/** EPON MAC in the dotted form the ZTE `mac` command expects, e.g. bcf8.8b45.ebcc. */
+const macField = z
+  .string()
+  .trim()
+  .regex(/^[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}$/, "MAC i pavlefshëm (format: bcf8.8b45.ebcc)");
+/** Traffic/SLA profile name: a single bareword token. */
+const profileField = z.string().trim().min(1).max(48).regex(/^[A-Za-z0-9._\-]+$/, "Profil i pavlefshëm");
+/** PPPoE username/password: a single CLI token — symbols allowed, but no whitespace or
+ * control chars (a space would already break the `pppoe ... user X password Y` command). */
+const pppoeField = z.string().min(1).max(64).regex(/^[^\s\p{Cc}]+$/u, "Karaktere të palejuara");
+/** ONU display name: printable, spaces allowed, but no newline/control chars. */
+const onuNameField = z.string().trim().min(1).max(48).regex(/^[^\p{Cc}]+$/u, "Karaktere të palejuara në emër");
 
 export const createOltSchema = z.object({
   name: z.string().min(1, "Emri është i detyrueshëm"),
@@ -45,40 +69,40 @@ export const updateOltSchema = z.object({
 
 export const authorizeOnuSchema = z.object({
   oltId: z.coerce.number().int().positive(),
-  onuSerial: z.string().min(1),
+  onuSerial: onuSerialField,
   ponPort: ponPortString,
-  onuName: z.string().optional().default(DEFAULT_ONU_NAME),
+  onuName: onuNameField.optional().default(DEFAULT_ONU_NAME),
   onuType: z.enum(ONU_TYPES).optional().default("F660"),
   tcontProfile: z.enum(TCONT_PROFILES).optional().default("SMARTOLT-1G-UP"),
-  trafficProfile: z.string().optional().default(DEFAULT_TRAFFIC_PROFILE),
+  trafficProfile: profileField.optional().default(DEFAULT_TRAFFIC_PROFILE),
   vlanId: z.coerce.number().int().positive().optional().default(DEFAULT_VLAN_ID),
 });
 
 export const authorizeEponSchema = z.object({
   oltId: z.coerce.number().int().positive(),
   ponPort: eponPonPortString,
-  onuMac: z.string().min(1, "MAC është i detyrueshëm"),
-  onuType: z.string().min(1, "Zgjidh tipin e ONU-së"),
-  onuName: z.string().optional().default(DEFAULT_ONU_NAME),
+  onuMac: macField,
+  onuType: z.enum(EPON_ONU_TYPES),
+  onuName: onuNameField.optional().default(DEFAULT_ONU_NAME),
   vlanId: z.coerce.number().int().positive().optional().default(DEFAULT_EPON_VLAN_ID),
 });
 
 export const pppoeSchema = z.object({
   oltId: z.coerce.number().int().positive(),
   ponPort: ponPortString,
-  pppoeUsername: z.string().min(1),
-  pppoePassword: z.string().min(1),
+  pppoeUsername: pppoeField,
+  pppoePassword: pppoeField,
   vlanId: z.coerce.number().int().positive().optional().default(DEFAULT_VLAN_ID),
 });
 
 export const authorizeAndPppoeSchema = authorizeOnuSchema.extend({
-  pppoeUsername: z.string().min(1),
-  pppoePassword: z.string().min(1),
+  pppoeUsername: pppoeField,
+  pppoePassword: pppoeField,
 });
 
 export const replaceOnuSchema = z.object({
   onuId: z.coerce.number().int().positive(),
-  onuSerial: z.string().min(1),
+  onuSerial: onuSerialField,
   onuType: z.enum(ONU_TYPES).optional().default("F660"),
 });
 

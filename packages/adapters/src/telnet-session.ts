@@ -1,5 +1,5 @@
 import { Socket } from "node:net";
-import type { CliSession } from "./cli-session.js";
+import { assertSingleCliLine, type CliSession } from "./cli-session.js";
 
 /**
  * Minimal raw-TCP "telnet" session matching Python telnetlib's usage in
@@ -56,6 +56,7 @@ export class TelnetSession implements CliSession {
   }
 
   write(data: string) {
+    assertSingleCliLine(data);
     if (!this.closed) this.socket.write(data + "\n");
   }
 
