@@ -28,10 +28,11 @@ import {
 import { AppSidebar } from "./app-sidebar";
 import { MobileNav } from "./mobile-nav";
 import { OltSelector } from "./olt-selector";
+import { AlarmBell } from "./alarm-bell";
 
 export function Shell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { olts, currentOlt, allOlts, setCurrentOltId, refresh } = useOlts();
+  const { olts, currentOlt, setCurrentOltId, refresh } = useOlts();
   const me = useMe();
   const [addOpen, setAddOpen] = useState(false);
 
@@ -53,7 +54,8 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="text-sm font-semibold lg:hidden">OLTFlow</span>
           </div>
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <OltSelector olts={olts} current={currentOlt} allOlts={allOlts} onChange={setCurrentOltId} />
+            <AlarmBell />
+            <OltSelector olts={olts} current={currentOlt} onChange={setCurrentOltId} />
             {can.admin(me?.role) && (
               <Button size="sm" className="shrink-0" onClick={() => setAddOpen(true)}>
                 <Plus className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Shto OLT</span>

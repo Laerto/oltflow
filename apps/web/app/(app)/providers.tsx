@@ -31,10 +31,8 @@ export function OltProvider({ children }: { children: ReactNode }) {
       const { olts } = await api.listOlts();
       setOlts(olts);
       setCurrentOltIdState((prev) => {
-        if (prev === ALL_OLTS_ID) return prev; // keep an explicit "All OLTs" selection
         if (prev && olts.some((o) => o.id === prev)) return prev;
         const stored = Number(localStorage.getItem(STORAGE_KEY));
-        if (stored === ALL_OLTS_ID) return ALL_OLTS_ID;
         if (stored && olts.some((o) => o.id === stored)) return stored;
         return olts[0]?.id ?? null;
       });

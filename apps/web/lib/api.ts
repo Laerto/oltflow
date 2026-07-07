@@ -133,7 +133,22 @@ export const api = {
     request<{ ticket: TicketRow }>(`/api/tickets/${id}/action`, { method: "POST", body: JSON.stringify({ action, resolutionNote }) }),
   ping: (ip: string) =>
     request<{ alive: boolean; avgMs: number | null; loss: number }>(`/api/ping?ip=${encodeURIComponent(ip)}`),
+  alarms: () => request<AlarmsResponse>("/api/alarms"),
 };
+
+export type AlarmSeverity = "critical" | "warning";
+export interface AlarmItem {
+  id: string;
+  severity: AlarmSeverity;
+  kind: "olt_offline" | "port_outage" | "onu_signal";
+  title: string;
+  detail: string;
+  href?: string;
+}
+export interface AlarmsResponse {
+  items: AlarmItem[];
+  counts: { critical: number; warning: number };
+}
 
 export interface Me {
   id: number;

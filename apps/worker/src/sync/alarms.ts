@@ -10,6 +10,10 @@ import { kv } from "../kv.js";
 type AlarmType = "offline" | "signal" | "expiry";
 const ACTIVE_SET_KEY = "oltflow:alarm:active"; // members: `${onuId}:${type}`
 const SIGNAL_ALARM_DBM = -27;
+// Danger line: a client whose Rx has sunk to ≈ -30 dBm is close to dropping. Unlike the
+// fire-once weak-signal alert, this one nags once every calendar day until it's fixed.
+const SIGNAL_DANGER_DBM = Number(process.env.SIGNAL_DANGER_DBM ?? -30);
+const DAY_SECONDS = 60 * 60 * 25; // 25h key TTL so the once-a-day guard always spans to the next run
 const EXPIRY_ALARM_DAYS = 7;
 
 export async function checkAlarms(): Promise<number> {
@@ -39,6 +43,16 @@ export async function checkAlarms(): Promise<number> {
   const clear = async (id: number, type: AlarmType) => {
     await kv.srem(ACTIVE_SET_KEY, `${id}:${type}`);
   };
+  // Once-a-day "flash": a per-day Redis key (NX) means the danger alert fires at most once per
+  // calendar day per ONU, and again the next day if the client is still bad.
+  const day = new Date().toISOString().slice(0, 10);
+  const fireDaily = async (id: number, text: string) => {
+    const key = `oltflow:alarm:danger:${id}:${day}`;
+    const first = await kv.set(key, "1", "EX", DAY_SECONDS, "NX");
+    if (!first) return; // already flashed today
+    if (await sendTelegram(text)) sent++;
+    else await kv.del(key).catch(() => {}); // send failed — let a later tick retry today
+  };
 
   for (const o of onus) {
     const who = `${o.name || o.serial || o.ponPort} (${o.serial ?? "-"})${o.mgmtIp ? ` · ${o.mgmtIp}` : ""}`;
@@ -57,6 +71,12 @@ export async function checkAlarms(): Promise<number> {
       await fire(o.id, "signal", `🟠 <b>Sinjal i dobët</b>: ${who} — ${rx} dBm (OLT ${olt})`);
     } else if (rx !== null) {
       await clear(o.id, "signal");
+    }
+
+    // Danger signal (≈ -30 dBm) — a once-a-day flash while it persists, so the office is
+    // reminded every day to send a technician before the customer drops entirely.
+    if (rx !== null && rx <= SIGNAL_DANGER_DBM) {
+      await fireDaily(o.id, `⚠️🚨 <b>Sinjal në rrezik</b> (≤ ${SIGNAL_DANGER_DBM} dBm): ${who} — ${rx} dBm (OLT ${olt}) — kontrollo sot!`);
     }
 
     // Expiry within 7 days

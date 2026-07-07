@@ -40,6 +40,22 @@ function isLowSignal(rx: number | null | undefined): boolean {
   return b === "warning" || b === "critical";
 }
 
+/** Orders rows within a selected signal band so an audit reads top-to-bottom by priority.
+ * warning/good — best first (highest dBm), as the office works the strongest down; critical —
+ * worst first (most negative dBm), so the most-endangered customers surface at the top.
+ * ONUs with no reading sink to the bottom either way. */
+function sortBySignalBand(rows: OnuRow[], band: Exclude<SignalBand, "all">): OnuRow[] {
+  const worstFirst = band === "critical";
+  return [...rows].sort((a, b) => {
+    const ax = a.onuRx ?? null;
+    const bx = b.onuRx ?? null;
+    if (ax === null && bx === null) return 0;
+    if (ax === null) return 1;
+    if (bx === null) return -1;
+    return worstFirst ? ax - bx : bx - ax;
+  });
+}
+
 /** Renders the RADIUS expiry date colored by urgency: red = expired, amber ≤ 7 days, else muted. */
 function ExpiryCell({ iso }: { iso: string | null }) {
   if (!iso) return <span className="text-muted-foreground">–</span>;
@@ -175,7 +191,7 @@ export default function OnusPage() {
 }
 
 function OnusContent() {
-  const { currentOlt, allOlts, olts } = useOlts();
+  const { currentOlt, olts } = useOlts();
   const me = useMe();
   const operate = can.operate(me?.role);
   const admin = can.admin(me?.role);
@@ -200,13 +216,17 @@ function OnusContent() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busyMsg, setBusyMsg] = useState<string | null>(null);
 
+  // A non-empty search always queries the WHOLE fleet, so a technician can find any customer
+  // by SN/port/name straight away — no need to first pick their OLT. An empty search shows the
+  // OLT selected in the header. `multiOlt` drives the extra OLT column in fleet-wide results.
+  const searching = search.trim().length > 0;
+  const multiOlt = searching;
+
   async function load() {
-    if (!allOlts && !currentOlt) return;
+    if (!searching && !currentOlt) return;
     setLoading(true);
     try {
-      // "All OLTs" mode hits the global endpoint so support can find any customer
-      // across the whole fleet; otherwise the per-OLT list.
-      const { onus } = allOlts ? await api.allOnus() : await api.onus(currentOlt!.id);
+      const { onus } = searching ? await api.allOnus() : await api.onus(currentOlt!.id);
       setOnus(onus);
     } finally {
       setLoading(false);
@@ -253,7 +273,7 @@ function OnusContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentOlt?.id, allOlts]);
+  }, [currentOlt?.id, searching]);
 
   const models = Array.from(new Set(onus.map((o) => o.type).filter(Boolean) as string[])).sort();
 
@@ -266,7 +286,9 @@ function OnusContent() {
     .filter((o) => signalBand === "all" || classifySignal(o.onuRx) === signalBand)
     .filter((o) => `${o.ponPort}${o.serial ?? ""}${o.name ?? ""}${o.type ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
-  // Optional sort by expiry (Skadenca header): expired / soonest-to-expire on top; null last.
+  // Ordering precedence: an explicit Skadenca sort wins; otherwise, when a signal band is
+  // selected, auto-order by optical quality so an audit reads top-to-bottom by priority
+  // (see sortBySignalBand); else keep the natural port order.
   const filtered = sortExpiry
     ? [...base].sort((a, b) => {
         const ax = a.expiration ? new Date(a.expiration).getTime() : null;
@@ -276,9 +298,11 @@ function OnusContent() {
         if (bx === null) return -1;
         return ax - bx;
       })
-    : base;
+    : signalBand !== "all"
+      ? sortBySignalBand(base, signalBand)
+      : base;
 
-  if (!currentOlt && !allOlts) {
+  if (!currentOlt && !searching) {
     return (
       <Card>
         <EmptyState>Zgjidh ose shto një OLT.</EmptyState>
@@ -295,10 +319,10 @@ function OnusContent() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight text-foreground">
-              {allOlts ? "ONU-të — Të gjitha OLT-të" : "ONU-të e Konfiguruara"}
+              {searching ? "ONU-të — Kërkim në të gjitha OLT-të" : "ONU-të e Konfiguruara"}
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {allOlts ? `${olts.length} OLT` : currentOlt?.name} · {filtered.length} nga {onus.length} ONU
+              {searching ? `${olts.length} OLT` : currentOlt?.name} · {filtered.length} nga {onus.length} ONU
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -325,7 +349,7 @@ function OnusContent() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Kërko SN, port, emër..."
+              placeholder="Kërko në të gjitha OLT-të: SN, port, emër..."
               className="w-full pl-9 font-mono"
             />
           </div>
@@ -404,7 +428,7 @@ function OnusContent() {
               <Card key={o.id} className="p-3.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    {allOlts && o.oltName && (
+                    {multiOlt && o.oltName && (
                       <Badge variant="outline" className={`mb-1 ${oltTint(o.oltId)}`}>{o.oltName}</Badge>
                     )}
                     <div className="truncate font-semibold">{o.name || "–"}</div>
@@ -453,7 +477,7 @@ function OnusContent() {
 
           {/* Desktop: table — fixed layout so columns never reflow on filter/refresh */}
           <div className="hidden overflow-x-auto rounded-md border bg-card md:block">
-            <Table className={`${allOlts ? "min-w-[1240px]" : "min-w-[1100px]"} table-fixed`}>
+            <Table className={`${multiOlt ? "min-w-[1240px]" : "min-w-[1100px]"} table-fixed`}>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-10">
@@ -466,7 +490,7 @@ function OnusContent() {
                       />
                     )}
                   </TableHead>
-                  {allOlts && <TableHead className="w-32 text-[10px] uppercase">OLT</TableHead>}
+                  {multiOlt && <TableHead className="w-32 text-[10px] uppercase">OLT</TableHead>}
                   <TableHead className="w-24 text-[10px] uppercase">Status</TableHead>
                   <TableHead className="w-36 text-[10px] uppercase">Serial</TableHead>
                   <TableHead className="w-64 text-[10px] uppercase">Emër Mbiemër</TableHead>
@@ -507,7 +531,7 @@ function OnusContent() {
                           />
                         )}
                       </TableCell>
-                      {allOlts && (
+                      {multiOlt && (
                         <TableCell className="truncate">
                           <Badge variant="outline" className={oltTint(o.oltId)} title={o.oltName}>{o.oltName}</Badge>
                         </TableCell>
