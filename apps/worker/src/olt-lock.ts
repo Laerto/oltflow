@@ -11,8 +11,22 @@ function lockKey(oltId: number) {
   return `oltflow:olt-lock:${oltId}`;
 }
 
+function wantedKey(oltId: number) {
+  return `oltflow:olt-wanted:${oltId}`;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * True while an interactive (operator-triggered) job is blocked waiting for this OLT's lock.
+ * The background sweep polls this between passes and defers its expensive optional passes so
+ * the operator's click wins the lock quickly instead of timing out behind a detail sweep on a
+ * big OLT (KSAMIL/BORSH). See withOltLock's `interactive` flag and syncOlt.
+ */
+export async function isOltWanted(oltId: number): Promise<boolean> {
+  return (await redis.exists(wantedKey(oltId))) === 1;
 }
 
 /**
@@ -36,18 +50,30 @@ function sleep(ms: number): Promise<void> {
 export async function withOltLock<T>(
   oltId: number,
   fn: () => Promise<T>,
-  opts: { ttlSeconds?: number; maxWaitMs?: number } = {}
+  opts: { ttlSeconds?: number; maxWaitMs?: number; interactive?: boolean } = {}
 ): Promise<T> {
   const ttlSeconds = opts.ttlSeconds ?? 30;
   const maxWaitMs = opts.maxWaitMs ?? 20000;
+  // Operator-triggered jobs default to interactive; only the background sweep opts out.
+  const interactive = opts.interactive ?? true;
   const key = lockKey(oltId);
+  const wKey = wantedKey(oltId);
 
   const start = Date.now();
   let acquired: string | null = null;
   while (!(acquired = await redis.set(key, "1", "EX", ttlSeconds, "NX"))) {
-    if (Date.now() - start >= maxWaitMs) throw new OltBusyError(oltId);
+    // Flag that an operator is waiting so a background sweep holding the lock defers its
+    // optional passes and releases early. TTL is short and refreshed each retry, so it
+    // self-clears if this process dies mid-wait.
+    if (interactive) await redis.set(wKey, "1", "EX", 15).catch(() => {});
+    if (Date.now() - start >= maxWaitMs) {
+      if (interactive) await redis.del(wKey).catch(() => {});
+      throw new OltBusyError(oltId);
+    }
     await sleep(250 + Math.random() * 250);
   }
+  // Won the lock — clear our own waiting flag so the sweep doesn't needlessly skip its next tick.
+  if (interactive) await redis.del(wKey).catch(() => {});
 
   const heartbeat = setInterval(() => {
     redis.expire(key, ttlSeconds).catch(() => {});

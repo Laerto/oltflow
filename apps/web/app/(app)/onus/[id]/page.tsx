@@ -75,17 +75,20 @@ export default function OnuDetailPage() {
         const { devices } = await api.wifiInfo(onuId);
         setWifi(devices[0] ?? null);
       }
+      return data;
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
     // Auto-pull fresh signal + outage history (Historia e Lidhjes) from the OLT on open,
-    // so the office sees the connection/LOS log without an extra click.
-    void doRefresh();
+    // so the office sees the connection/LOS log without an extra click. Skip for EPON — the
+    // CLI refresh path is GPON-only, so firing it would just log a failed job on every open.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load().then((data) => {
+      if (data && !isEponPort(data.ponPort)) void doRefresh();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onuId]);
 
