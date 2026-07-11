@@ -33,6 +33,10 @@ const pppoeField = z.string().min(1).max(64).regex(/^[^\s\p{Cc}]+$/u, "Karaktere
 /** ONU display name: printable, spaces allowed, but no newline/control chars. */
 const onuNameField = z.string().trim().min(1).max(48).regex(/^[^\p{Cc}]+$/u, "Karaktere të palejuara në emër");
 
+/** Rename an already-provisioned ONU (fix a registration typo). */
+export const renameOnuSchema = z.object({ name: onuNameField });
+export type RenameOnuInput = z.infer<typeof renameOnuSchema>;
+
 export const createOltSchema = z.object({
   name: z.string().min(1, "Emri është i detyrueshëm"),
   ip: z.string().min(1, "IP është e detyrueshme"),

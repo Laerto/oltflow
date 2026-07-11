@@ -10,7 +10,9 @@ import {
   ClipboardList,
   Globe,
   Loader2,
+  Cloud,
   Lock,
+  MoreHorizontal,
   Pencil,
   Power,
   RefreshCw,
@@ -20,6 +22,14 @@ import {
   Wrench,
   MapPin,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RenameOnuModal } from "@/components/rename-onu-modal";
 import { api, ApiError, pollJob, type OnuRow, type WifiDevice } from "@/lib/api";
 import { stateBadgeColor } from "@/lib/ui-helpers";
 import { cn } from "@/lib/utils";
@@ -71,6 +81,8 @@ export default function OnuDetailPage() {
   const [wanBusy, setWanBusy] = useState(false);
   const [rebootMsg, setRebootMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [acsBusy, setAcsBusy] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -163,6 +175,22 @@ export default function OnuDetailPage() {
     }
   }
 
+  async function doPushAcs() {
+    if (!confirm("Të injektohet ACS URL (TR-069) te kjo ONU? CPE-ja do fillojë të informojë GenieACS pa hyrë në web-in e saj.")) return;
+    setAcsBusy(true);
+    setRebootMsg(null);
+    try {
+      const { jobId } = await api.pushAcsToOnu(onuId);
+      const job = await pollJob(jobId);
+      if (job.status === "failed") throw new Error(job.error ?? "Dështoi");
+      setRebootMsg({ kind: "ok", text: (job.output as { message?: string })?.message ?? "ACS URL u injektua — CPE-ja do informojë brenda pak minutash." });
+    } catch (err) {
+      setRebootMsg({ kind: "err", text: err instanceof ApiError || err instanceof Error ? err.message : "Gabim i papritur" });
+    } finally {
+      setAcsBusy(false);
+    }
+  }
+
   if (loading && !onu) {
     return (
       <div className="flex justify-center py-20">
@@ -195,44 +223,58 @@ export default function OnuDetailPage() {
             {connectionKind === "route" && <> · <Badge variant="secondary">Route</Badge></>}
           </div>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 [&>button]:h-auto [&>button]:min-h-9 [&>button]:justify-center [&>button]:text-xs sm:flex sm:w-auto sm:flex-wrap sm:[&>button]:text-sm">
-          {operate && (
-            <Button variant="secondary" onClick={() => setTicketOpen(true)} className="border-amber-500/40 text-amber-600 hover:bg-amber-500/10">
-              <Wrench className="h-4 w-4" /> Hap tiket
-            </Button>
-          )}
-          {operate && (
-            <Button variant="secondary" onClick={setMyLocation} title="Ruaj vendndodhjen GPS të kësaj ONU-je (për hartën)">
-              <MapPin className="h-4 w-4" /> <span className="hidden sm:inline">Vendndodhja</span>
-            </Button>
-          )}
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Button variant="secondary" onClick={doRefresh} disabled={refreshing || epon} title={epon ? "Rifreskimi CLI nuk është ende i implementuar për EPON" : undefined}>
-            {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Rifresko nga OLT
+            {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Rifresko
           </Button>
           {operate && (
             <Button variant="default" onClick={() => setPppoeOpen(true)} disabled={epon} title={epon ? "PPPoE nuk është i mbështetur për EPON ende" : undefined}>
               <Lock className="h-4 w-4" /> Ndrysho PPPoE
             </Button>
           )}
-          {admin && (
-            <Button variant="secondary" onClick={() => setReplaceOpen(true)} disabled={epon} title={epon ? "Zëvendësimi nuk është i mbështetur për EPON ende" : undefined}>
-              <RefreshCw className="h-4 w-4" /> Zëvendëso ONU
-            </Button>
-          )}
           {operate && (
-            <Button variant="secondary" onClick={doWanAccess} disabled={wanBusy || epon} title={epon ? "Nuk mbështetet për EPON" : "Hap aksesin WAN te paneli i ONU-së"}>
-              {wanBusy ? <Spinner /> : <Globe className="h-4 w-4" />} Akses WAN
-            </Button>
-          )}
-          {operate && (
-            <Button variant="destructive" onClick={doReboot} disabled={rebooting || !wifi?.deviceId} title={!wifi?.deviceId ? "Nuk ka TR-069 për këtë ONU" : undefined}>
-              {rebooting ? <Spinner /> : <Power className="h-4 w-4" />} Reboot ONU
-            </Button>
-          )}
-          {admin && !epon && (
-            <Button variant="destructive" onClick={() => setDeleteOpen(true)} title="Fshi këtë ONU nga OLT-i">
-              <Trash2 className="h-4 w-4" /> Fshi ONU
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary">
+                  <MoreHorizontal className="h-4 w-4" /> Veprime
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setRenameOpen(true)}>
+                  <Pencil className="h-4 w-4" /> Edito emrin
+                </DropdownMenuItem>
+                {!epon && (
+                  <DropdownMenuItem onClick={doPushAcs} disabled={acsBusy}>
+                    <Cloud className="h-4 w-4" /> Konfiguro ACS (TR-069)
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => setTicketOpen(true)}>
+                  <Wrench className="h-4 w-4" /> Hap tiket
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={setMyLocation}>
+                  <MapPin className="h-4 w-4" /> Ruaj vendndodhjen
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={doWanAccess} disabled={wanBusy || epon}>
+                  <Globe className="h-4 w-4" /> Akses WAN
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={doReboot} disabled={rebooting || !wifi?.deviceId}>
+                  <Power className="h-4 w-4" /> Reboot ONU
+                </DropdownMenuItem>
+                {admin && (
+                  <DropdownMenuItem onClick={() => setReplaceOpen(true)} disabled={epon}>
+                    <RefreshCw className="h-4 w-4" /> Zëvendëso ONU
+                  </DropdownMenuItem>
+                )}
+                {admin && !epon && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive">
+                      <Trash2 className="h-4 w-4" /> Fshi ONU
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
@@ -377,6 +419,7 @@ export default function OnuDetailPage() {
       )}
 
       <PppoeModal open={pppoeOpen} onClose={() => setPppoeOpen(false)} oltId={onu.oltId} ponPort={onu.ponPort} onDone={load} />
+      <RenameOnuModal open={renameOpen} onClose={() => setRenameOpen(false)} onuId={onu.id} currentName={onu.name} onDone={load} />
       <ReplaceOnuModal
         open={replaceOpen}
         onClose={() => setReplaceOpen(false)}

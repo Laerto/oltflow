@@ -20,6 +20,7 @@ import { handleReplaceOnu } from "./handlers/replaceOnu.js";
 import { handleDeleteOnu } from "./handlers/deleteOnu.js";
 import { handleEnableWanAccess } from "./handlers/enableWanAccess.js";
 import { handlePushAcs } from "./handlers/pushAcs.js";
+import { handleSetOnuName } from "./handlers/setOnuName.js";
 import { handleRebootOnu } from "./handlers/rebootOnu.js";
 import { handleRebootOnuCli } from "./handlers/rebootOnuCli.js";
 import { handleBackup, handleBackupVerify } from "./handlers/backup.js";
@@ -48,6 +49,7 @@ const HANDLERS: Record<string, Handler> = {
   [JOB_NAMES.deleteOnu]: handleDeleteOnu,
   [JOB_NAMES.enableWanAccess]: handleEnableWanAccess,
   [JOB_NAMES.pushAcs]: handlePushAcs,
+  [JOB_NAMES.setOnuName]: handleSetOnuName,
   [JOB_NAMES.rebootOnu]: handleRebootOnu,
   [JOB_NAMES.rebootOnuCli]: handleRebootOnuCli,
   [JOB_NAMES.backup]: handleBackup,

@@ -14,6 +14,7 @@ export const JOB_NAMES = {
   deleteOnu: "delete-onu",
   enableWanAccess: "enable-wan-access",
   pushAcs: "push-acs",
+  setOnuName: "set-onu-name",
   rebootOnu: "reboot-onu",
   rebootOnuCli: "reboot-onu-cli",
   syncOlt: "sync-olt", // combined per-OLT sweep (state + signal + detail), one deduped job/OLT
@@ -106,6 +107,15 @@ export interface EnableWanAccessPayload {
 export interface PushAcsPayload {
   oltId: number;
   acsUrl: string;
+  /** Restrict the push to these GPON ONUs; omit to push to every GPON ONU on the OLT (bulk). */
+  ponPorts?: string[];
+}
+
+export interface SetOnuNamePayload {
+  oltId: number;
+  onuId: number;
+  ponPort: string;
+  name: string;
 }
 export interface RebootOnuPayload {
   onuId: number;

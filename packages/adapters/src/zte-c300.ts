@@ -709,6 +709,25 @@ export async function pushAcsUrl(
   }
 }
 
+/** Renames an already-provisioned GPON ONU (fix a registration typo): enter the ONU interface,
+ * set `name <name>`, save. Same `name` command the authorize flow uses. */
+export async function setOnuName(creds: OltCreds, ponPort: string, name: string): Promise<{ output: string }> {
+  const onu = onuInterface(parsePonPort(ponPort));
+  const session = await login(creds);
+  try {
+    let output = await session.sendCommand("configure terminal", 500);
+    output += await session.sendCommand(`interface ${onu}`, 800);
+    output += await session.sendCommand(`name ${name}`, 800);
+    output += await session.sendCommand("end", 500);
+    output += await session.sendCommand("write", 3000);
+    const err = extractZteError(output);
+    if (err) throw new Error(`OLT refuzoi komandën: ${err}`);
+    return { output };
+  } finally {
+    session.close();
+  }
+}
+
 /** Reboots an ONU from the OLT CLI (works for GPON & EPON, TR-069 not required):
  * `pon-onu-mng <onu>` → `reboot` → answer the `Confirm to reboot? [yes/no]:` prompt. */
 export async function rebootOnuCli(creds: OltCreds, ponPort: string): Promise<{ output: string }> {

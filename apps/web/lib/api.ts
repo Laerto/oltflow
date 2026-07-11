@@ -88,6 +88,10 @@ export const api = {
       `/api/onus/${onuId}/signal-history`
     ),
   refreshOnu: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}/refresh`, { method: "POST" }),
+  renameOnu: (onuId: number, name: string) =>
+    request<{ jobId: string }>(`/api/onus/${onuId}/rename`, { method: "POST", body: JSON.stringify({ name }) }),
+  pushAcsToOnu: (onuId: number) =>
+    request<{ jobId: string; acsUrl: string }>(`/api/onus/${onuId}/push-acs`, { method: "POST" }),
   onuLive: (onuId: number) => request<{ jobId: string }>(`/api/onus/${onuId}/live`, { method: "POST" }),
   replaceOnu: (onuId: number, input: { onuSerial: string; onuType: string }) =>
     request<{ jobId: string }>(`/api/onus/${onuId}/replace`, { method: "POST", body: JSON.stringify(input) }),
