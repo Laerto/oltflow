@@ -294,7 +294,7 @@ export default function OnuDetailPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-3">
         <SectionCard title={<><ClipboardList className="inline h-4 w-4" /> Informacioni ONU <Badge variant={stateBadgeColor(onu.state)}>● {onu.state === "working" ? "Online" : "Offline"}</Badge></>}>
           <div className="px-4">
             <InfoRow label="OLT" value={onu.oltName} />
@@ -310,12 +310,11 @@ export default function OnuDetailPage() {
           </div>
         </SectionCard>
 
-        <div className="flex flex-col gap-3.5">
-          <SectionCard title={<><Activity className="inline h-4 w-4" /> Sinjali Optik</>}>
+        <SectionCard title={<><Activity className="inline h-4 w-4" /> Sinjali Optik</>}>
             <div className="p-4">
               {hasSignal ? (
                 <>
-                  <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="mb-2.5 grid grid-cols-2 gap-2">
                     <SigBox label="ONU RX dBm" value={onu.onuRx} color={signalColor(onu.onuRx)} />
                     <SigBox label="ONU TX dBm" value={onu.onuTx} color="text-emerald-600" />
                     <SigBox label="OLT RX dBm" value={onu.oltRx} color="text-emerald-600" />
@@ -365,7 +364,6 @@ export default function OnuDetailPage() {
               <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-muted-foreground">rifresko për ta parë</span>} />
             </div>
           </SectionCard>
-        </div>
       </div>
 
       {/* ACS / TR-069 panel — direkt poshtë ONU Information; menaxhon SSID/pass/on-off të CPE-së. */}
@@ -484,8 +482,8 @@ function SectionCard({
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex items-center border-b border-border/50 py-2 text-[13px] last:border-0">
-      <span className="w-28 flex-shrink-0 text-xs text-muted-foreground sm:w-[150px]">{label}</span>
+    <div className="flex items-center gap-2 border-b border-border/50 py-1.5 text-[13px] last:border-0">
+      <span className="w-24 flex-shrink-0 text-xs text-muted-foreground sm:w-[116px]">{label}</span>
       <span className="min-w-0 flex-1 font-medium">{value}</span>
     </div>
   );
