@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { getWanIpsBySerial } from "@oltflow/adapters";
-import { JOB_NAMES, isEponPort, onuConnectionKind } from "@oltflow/core";
+import { JOB_NAMES, isEponPort, onuConnectionKind, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
-import { guardOnuAccess } from "@/lib/olt-access";
+import { guardOnuAccess, guardTier } from "@/lib/olt-access";
 import { enqueueJob } from "@/lib/queue";
 
 const GENIEACS_URL = process.env.GENIEACS_URL ?? "";
@@ -60,6 +60,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 // the ONU's geolocation (network map). Only the fields present in the body are updated.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
+  const tierDenied = await guardTier(TIER.OPERATE);
+  if (tierDenied) return tierDenied;
   const { id } = await params;
   const denied = await guardOnuAccess(Number(id));
   if (denied) return denied;
@@ -106,6 +108,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
+  const tierDenied = await guardTier(TIER.ADMIN);
+  if (tierDenied) return tierDenied;
   const { id } = await params;
   const denied = await guardOnuAccess(Number(id));
   if (denied) return denied;

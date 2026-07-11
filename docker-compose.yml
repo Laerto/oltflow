@@ -9,7 +9,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"   # localhost-only: not reachable from the network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-oltpanel}"]
       interval: 5s
@@ -24,7 +24,7 @@ services:
     volumes:
       - redisdata:/data
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"   # localhost-only: Redis has no password, must not be exposed
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -41,13 +41,23 @@ services:
     environment:
       PORT: "3000"
       NODE_ENV: "production"
+      # Heap cap kept well UNDER the 4g container limit so V8 runs a full GC and reclaims the
+      # heavy per-poll allocations (/api/alarms loads the whole fleet) BEFORE RSS hits 4g and
+      # the kernel OOM-kills it. 3072 was too close to the cap → OOM before GC could reclaim.
+      NODE_OPTIONS: "--max-old-space-size=2048"
+    # Hard memory ceiling: OOM-kill (and auto-restart) instead of eating all host RAM+swap.
+    # memswap_limit == mem_limit disables container swap so it can never thrash the box.
+    mem_limit: 4g
+    memswap_limit: 4g
     # Production build (frees ~2GB RAM vs `next dev` + serves instantly, no per-request
     # recompile). Rebuilds on start so a fresh .next volume is always valid. Cookie stays
     # non-secure over HTTP via COOKIE_SECURE (see lib/auth.ts). Flip back to `npm run dev`
     # for iterative web development.
-    command: ["sh", "-c", "npm run build -w apps/web && npm run start -w apps/web"]
+    # Fast restart: only build when there is no valid build in the persisted .next volume.
+    # An OOM-restart then re-serves in seconds (npm start) instead of a multi-minute rebuild.
+    command: ["sh", "-c", "[ -f apps/web/.next/BUILD_ID ] && npm run start -w apps/web || (npm run build -w apps/web && npm run start -w apps/web)"]
     ports:
-      - "${WEB_PORT:-3001}:3000"
+      - "127.0.0.1:${WEB_PORT:-3001}:3000"   # localhost-only: reached via nginx reverse proxy
     volumes:
       - ./apps/web:/app/apps/web
       - ./packages:/app/packages
@@ -68,10 +78,18 @@ services:
       dockerfile: apps/worker/Dockerfile
     container_name: oltflow-worker
     env_file: .env
+    environment:
+      # Local backup root inside the container (host bind or named volume).
+      BACKUP_DIR: ${BACKUP_DIR:-/var/lib/oltflow/backups}
     volumes:
       - ./apps/worker:/app/apps/worker
       - ./packages:/app/packages
       - worker_node_modules:/app/node_modules
+      # Persist backups on the host (override with a named volume if preferred).
+      - ${BACKUP_HOST_PATH:-./data/backups}:/var/lib/oltflow/backups
+      # Read-only access to compose + env for config archive (optional; empty if missing).
+      - ./.env:/app/.env.backup:ro
+      - ./docker-compose.yml:/app/docker-compose.yml.backup:ro
     depends_on:
       postgres:
         condition: service_healthy

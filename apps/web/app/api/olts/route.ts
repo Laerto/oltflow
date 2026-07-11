@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
-import { createOltSchema, encryptSecret, JOB_NAMES } from "@oltflow/core";
+import { createOltSchema, encryptSecret, JOB_NAMES, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
-import { allowedOltIds } from "@/lib/olt-access";
+import { allowedOltIds, guardTier } from "@/lib/olt-access";
 import { enqueueJob, enqueueUntracked } from "@/lib/queue";
 
 const OLT_CRED_KEY = process.env.OLT_CRED_KEY ?? "";
@@ -58,6 +58,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const user = await requireUser();
+  const tierDenied = await guardTier(TIER.ADMIN);
+  if (tierDenied) return tierDenied;
   const body = await request.json().catch(() => null);
   const parsed = createOltSchema.safeParse(body);
   if (!parsed.success) {

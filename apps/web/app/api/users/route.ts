@@ -1,37 +1,38 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@oltflow/db";
-import { userCreateSchema, roleRank, TIER } from "@oltflow/core";
-import { getSession } from "@/lib/auth";
-
-async function requireAdmin() {
-  const session = await getSession();
-  if (!session) return { error: NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 }) };
-  if (roleRank(session.role) < TIER.ADMIN) return { error: NextResponse.json({ error: "FORBIDDEN" }, { status: 403 }) };
-  return { session };
-}
+import { userCreateSchema } from "@oltflow/core";
+import { requirePerm } from "@/lib/authorize";
 
 export async function GET() {
-  const { error } = await requireAdmin();
-  if (error) return error;
+  const auth = await requirePerm("users.manage");
+  if ("error" in auth) return auth.error;
   const users = await prisma.user.findMany({
     select: {
       id: true,
       email: true,
       name: true,
       role: true,
+      status: true,
+      emailVerifiedAt: true,
       createdAt: true,
       telegramChatId: true,
       olts: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
   });
-  return NextResponse.json({ users });
+  return NextResponse.json({
+    users: users.map((u) => ({
+      ...u,
+      emailVerifiedAt: u.emailVerifiedAt?.toISOString() ?? null,
+      createdAt: u.createdAt.toISOString(),
+    })),
+  });
 }
 
 export async function POST(request: Request) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+  const auth = await requirePerm("users.manage");
+  if ("error" in auth) return auth.error;
 
   const parsed = userCreateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Të dhëna të pavlefshme" }, { status: 400 });
@@ -51,10 +52,28 @@ export async function POST(request: Request) {
       name: parsed.data.name ?? null,
       passwordH,
       role: parsed.data.role,
+      status: "active",
+      emailVerifiedAt: new Date(), // admin-created accounts skip email confirm
       telegramChatId: parsed.data.telegramChatId || null,
       olts: oltIds.length ? { connect: oltIds.map((id) => ({ id })) } : undefined,
     },
-    select: { id: true, email: true, name: true, role: true, createdAt: true, telegramChatId: true, olts: { select: { id: true, name: true } } },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      status: true,
+      emailVerifiedAt: true,
+      createdAt: true,
+      telegramChatId: true,
+      olts: { select: { id: true, name: true } },
+    },
   });
-  return NextResponse.json({ user });
+  return NextResponse.json({
+    user: {
+      ...user,
+      emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+      createdAt: user.createdAt.toISOString(),
+    },
+  });
 }

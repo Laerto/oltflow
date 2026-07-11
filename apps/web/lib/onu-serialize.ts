@@ -16,6 +16,10 @@ export function serializeOnu(
 ) {
   const signal = o.signals[0];
   const bridge = onuConnectionKind(o.type) === "bridge";
+  // Prefer the Signal row when present; fall back to denormalized lastOnuRx so list
+  // pages stay correct even when we stop joining Signal for scale.
+  const onuRx = signal?.onuRx ?? o.lastOnuRx ?? null;
+  const signalLevel = signal?.signalLevel ?? o.lastSignalLevel ?? null;
   return {
     id: o.id,
     oltId: o.oltId,
@@ -41,12 +45,12 @@ export function serializeOnu(
     lastSeen: o.lastSeen,
     // Route WAN IP: worker RADIUS live IP → GenieACS. Bridge shows Winbox (mgmtIp) instead.
     wanIp: bridge ? opts.acsIp : o.mgmtIp || opts.acsIp,
-    onuRx: signal?.onuRx ?? null,
+    onuRx,
     onuTx: signal?.onuTx ?? null,
     oltRx: signal?.oltRx ?? null,
     oltTx: signal?.oltTx ?? null,
     attenUp: signal?.attenUp ?? null,
     attenDown: signal?.attenDown ?? null,
-    signalLevel: signal?.signalLevel ?? null,
+    signalLevel,
   };
 }

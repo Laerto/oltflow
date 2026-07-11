@@ -71,16 +71,30 @@ export interface SignalFields {
 
 export async function recordSignal(onuId: number, signal: SignalFields): Promise<void> {
   if (signal.onuRx === undefined) return;
-  await prisma.signal.create({
-    data: {
-      onuId,
-      oltRx: signal.oltRx,
-      onuRx: signal.onuRx,
-      oltTx: signal.oltTx,
-      onuTx: signal.onuTx,
-      attenUp: signal.attenUp,
-      attenDown: signal.attenDown,
-      signalLevel: signal.signalLevel,
-    },
-  });
+  const recordedAt = new Date();
+  // Signal row + denormalized Onu.lastOnuRx in one transaction so the alarm tick and
+  // signal-band filters can use indexed Onu columns without scanning Signal history.
+  await prisma.$transaction([
+    prisma.signal.create({
+      data: {
+        onuId,
+        oltRx: signal.oltRx,
+        onuRx: signal.onuRx,
+        oltTx: signal.oltTx,
+        onuTx: signal.onuTx,
+        attenUp: signal.attenUp,
+        attenDown: signal.attenDown,
+        signalLevel: signal.signalLevel,
+        recordedAt,
+      },
+    }),
+    prisma.onu.update({
+      where: { id: onuId },
+      data: {
+        lastOnuRx: signal.onuRx,
+        lastSignalLevel: signal.signalLevel ?? null,
+        lastSignalAt: recordedAt,
+      },
+    }),
+  ]);
 }

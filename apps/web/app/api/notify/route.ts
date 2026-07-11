@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { guardTier } from "@/lib/olt-access";
 
 // Sends a Telegram message (Bot API). Body: { text }. No-op error if unconfigured.
 export async function POST(request: Request) {
   await requireUser();
+  const tierDenied = await guardTier(TIER.ADMIN);
+  if (tierDenied) return tierDenied;
   const token = process.env.TELEGRAM_BOT_TOKEN ?? "";
   const chatId = process.env.TELEGRAM_CHAT_ID ?? "";
   if (!token || !chatId) {

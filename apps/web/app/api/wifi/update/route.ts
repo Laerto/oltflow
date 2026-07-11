@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { wifiUpdateSchema, JOB_NAMES } from "@oltflow/core";
+import { wifiUpdateSchema, JOB_NAMES, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
-import { guardOnuAccess } from "@/lib/olt-access";
+import { guardOnuAccess, guardTier } from "@/lib/olt-access";
 import { enqueueJob } from "@/lib/queue";
 
 export async function POST(request: Request) {
   await requireUser();
+  const tierDenied = await guardTier(TIER.OPERATE);
+  if (tierDenied) return tierDenied;
   const body = await request.json().catch(() => null);
   const parsed = wifiUpdateSchema.safeParse(body);
   if (!parsed.success) {

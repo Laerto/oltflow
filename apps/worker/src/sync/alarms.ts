@@ -1,94 +1,384 @@
-import { prisma } from "@oltflow/db";
-import { sendTelegram, telegramConfigured } from "../telegram.js";
-import { kv } from "../kv.js";
+import {
+  prisma,
+  getSignalThresholds,
+  openAlarms,
+  clearAlarmsExcept,
+  type OpenAlarmInput,
+  type AlarmType,
+} from "@oltflow/db";
+import { notifyNewAlarms, clearNotifyDedup } from "../notify/engine.js";
 
-// Fires a Telegram alert once per (ONU, alarm-type) and won't repeat until the
-// condition clears — so a persistently-offline ONU doesn't spam every tick.
-// The dedup set lives in Redis (not process memory) so a worker restart/deploy
-// doesn't re-fire an alert for every ONU that's still in the same bad state.
-// Alarm types per spec: offline, weak signal (< -27 dBm), expiry within 7 days.
-type AlarmType = "offline" | "signal" | "expiry";
-const ACTIVE_SET_KEY = "oltflow:alarm:active"; // members: `${onuId}:${type}`
-const SIGNAL_ALARM_DBM = -27;
-// Danger line: a client whose Rx has sunk to ≈ -30 dBm is close to dropping. Unlike the
-// fire-once weak-signal alert, this one nags once every calendar day until it's fixed.
-const SIGNAL_DANGER_DBM = Number(process.env.SIGNAL_DANGER_DBM ?? -30);
-const DAY_SECONDS = 60 * 60 * 25; // 25h key TTL so the once-a-day guard always spans to the next run
-const EXPIRY_ALARM_DAYS = 7;
+/**
+ * Alarm tick:
+ *  1. SQL-side / chunked scans find ONUs/OLTs/ports that cross thresholds.
+ *  2. Persist open/clear transitions in the Alarm table.
+ *  3. Fire notification engine for newly opened alarms (rules → Telegram/SMTP/webhook/…).
+ */
+
+const PORT_MIN_ONUS = 3;
+const PORT_CRITICAL = 0.8;
+const PORT_WARNING = 0.5;
+const CHUNK = 500;
+
+function whoLabel(o: {
+  name: string | null;
+  serial: string | null;
+  ponPort: string;
+  mgmtIp: string | null;
+}): string {
+  return `${o.name || o.serial || o.ponPort} (${o.serial ?? "-"})${o.mgmtIp ? ` · ${o.mgmtIp}` : ""}`;
+}
+
+async function openAndNotify(inputs: OpenAlarmInput[]): Promise<number> {
+  if (inputs.length === 0) return 0;
+  // Enrich Telegram-friendly bodies for classic alarm texts
+  const enriched = inputs.map((a) => {
+    if (a.type === "onu.offline" && a.detail && !a.detail.includes("🔴")) {
+      return {
+        ...a,
+        // body used by notify is detail; keep title/detail as stored on Alarm
+      };
+    }
+    return a;
+  });
+  const { newlyOpened } = await openAlarms(enriched);
+  // Prefer richer HTML bodies for notifications
+  const forNotify = newlyOpened.map((a) => {
+    if (a.type === "onu.offline") {
+      return {
+        ...a,
+        detail: `🔴 <b>ONU Offline</b>: ${a.title} — ${a.detail ?? ""}`,
+      };
+    }
+    if (a.type === "onu.signal.warning") {
+      return { ...a, detail: `🟠 <b>Sinjal i dobët</b>: ${a.title} — ${a.detail ?? ""}` };
+    }
+    if (a.type === "onu.signal.danger") {
+      return {
+        ...a,
+        detail: `⚠️🚨 <b>Sinjal në rrezik</b>: ${a.title} — ${a.detail ?? ""} — kontrollo sot!`,
+      };
+    }
+    if (a.type === "onu.expiry") {
+      return { ...a, detail: `🟡 <b>Skadencë</b>: ${a.title} — ${a.detail ?? ""}` };
+    }
+    if (a.type === "olt.unreachable") {
+      return { ...a, detail: `🔴 <b>OLT Offline</b>: ${a.title}` };
+    }
+    if (a.type === "pon.outage") {
+      return { ...a, detail: `🟠 <b>PON outage</b>: ${a.title}` };
+    }
+    return a;
+  });
+  return notifyNewAlarms(forNotify);
+}
+
+/** Clear notify dedup for recovered alarm keys. */
+async function clearRecovered(type: AlarmType, stillActive: Set<string>): Promise<void> {
+  const open = await prisma.alarm.findMany({
+    where: { type, clearedAt: null },
+    select: { key: true },
+  });
+  // After clearAlarmsExcept, keys not in stillActive are cleared — find those
+  // by comparing before clear is awkward; instead clear dedup for keys we know recovered:
+  // call this AFTER clearAlarmsExcept by finding recently cleared.
+  void open;
+  void stillActive;
+}
 
 export async function checkAlarms(): Promise<number> {
-  if (!telegramConfigured()) return 0;
-
-  const onus = await prisma.onu.findMany({
-    select: {
-      id: true, name: true, serial: true, state: true, mgmtIp: true, expiration: true, ponPort: true,
-      olt: { select: { name: true } },
-      signals: { orderBy: { recordedAt: "desc" }, take: 1, select: { onuRx: true } },
-    },
-  });
-
+  const thresholds = await getSignalThresholds();
   const now = Date.now();
-  let sent = 0;
-  const fire = async (id: number, type: AlarmType, text: string) => {
-    const key = `${id}:${type}`;
-    const isNew = await kv.sadd(ACTIVE_SET_KEY, key);
-    if (!isNew) return; // already alerted, still active
-    if (await sendTelegram(text)) {
-      sent++;
-    } else {
-      // Send failed (Telegram down / rate limited) — un-mark so the next tick retries.
-      await kv.srem(ACTIVE_SET_KEY, key).catch(() => {});
+  const expiryCutoff = new Date(now + thresholds.expiryDays * 86_400_000);
+
+  let notified = 0;
+  const activeKeys = new Map<AlarmType, Set<string>>();
+  const mark = (type: AlarmType, key: string) => {
+    let s = activeKeys.get(type);
+    if (!s) {
+      s = new Set();
+      activeKeys.set(type, s);
     }
-  };
-  const clear = async (id: number, type: AlarmType) => {
-    await kv.srem(ACTIVE_SET_KEY, `${id}:${type}`);
-  };
-  // Once-a-day "flash": a per-day Redis key (NX) means the danger alert fires at most once per
-  // calendar day per ONU, and again the next day if the client is still bad.
-  const day = new Date().toISOString().slice(0, 10);
-  const fireDaily = async (id: number, text: string) => {
-    const key = `oltflow:alarm:danger:${id}:${day}`;
-    const first = await kv.set(key, "1", "EX", DAY_SECONDS, "NX");
-    if (!first) return; // already flashed today
-    if (await sendTelegram(text)) sent++;
-    else await kv.del(key).catch(() => {}); // send failed — let a later tick retry today
+    s.add(key);
   };
 
-  for (const o of onus) {
-    const who = `${o.name || o.serial || o.ponPort} (${o.serial ?? "-"})${o.mgmtIp ? ` · ${o.mgmtIp}` : ""}`;
-    const olt = o.olt.name;
-
-    // Offline
-    if (o.state && o.state !== "working") {
-      await fire(o.id, "offline", `🔴 <b>ONU Offline</b>: ${who} — OLT ${olt}`);
-    } else if (o.state === "working") {
-      await clear(o.id, "offline");
-    }
-
-    // Weak signal
-    const rx = o.signals[0]?.onuRx ?? null;
-    if (rx !== null && rx < SIGNAL_ALARM_DBM) {
-      await fire(o.id, "signal", `🟠 <b>Sinjal i dobët</b>: ${who} — ${rx} dBm (OLT ${olt})`);
-    } else if (rx !== null) {
-      await clear(o.id, "signal");
-    }
-
-    // Danger signal (≈ -30 dBm) — a once-a-day flash while it persists, so the office is
-    // reminded every day to send a technician before the customer drops entirely.
-    if (rx !== null && rx <= SIGNAL_DANGER_DBM) {
-      await fireDaily(o.id, `⚠️🚨 <b>Sinjal në rrezik</b> (≤ ${SIGNAL_DANGER_DBM} dBm): ${who} — ${rx} dBm (OLT ${olt}) — kontrollo sot!`);
-    }
-
-    // Expiry within 7 days
-    if (o.expiration) {
-      const days = Math.floor((o.expiration.getTime() - now) / 86_400_000);
-      if (days <= EXPIRY_ALARM_DAYS) {
-        const when = days < 0 ? `skadoi ${-days} ditë më parë` : `skadon pas ${days} ditë`;
-        await fire(o.id, "expiry", `🟡 <b>Skadencë</b>: ${who} — ${when} (OLT ${olt})`);
-      } else {
-        await clear(o.id, "expiry");
-      }
+  // ── 1) Offline OLTs ──────────────────────────────────────────────────────
+  const offlineOlts = await prisma.olt.findMany({
+    where: { status: "offline" },
+    select: { id: true, name: true },
+  });
+  const offlineOltIds = new Set(offlineOlts.map((o) => o.id));
+  const oltInputs: OpenAlarmInput[] = offlineOlts.map((o) => {
+    const key = `olt.unreachable:${o.id}`;
+    mark("olt.unreachable", key);
+    return {
+      key,
+      type: "olt.unreachable",
+      severity: "critical",
+      oltId: o.id,
+      title: `${o.name} — OLT pa lidhje`,
+      detail: "Power off ose s'arrihet nga rrjeti",
+      href: "/olts",
+    };
+  });
+  notified += await openAndNotify(oltInputs);
+  {
+    const before = await prisma.alarm.findMany({
+      where: { type: "olt.unreachable", clearedAt: null },
+      select: { key: true },
+    });
+    await clearAlarmsExcept("olt.unreachable", activeKeys.get("olt.unreachable") ?? new Set());
+    const still = activeKeys.get("olt.unreachable") ?? new Set();
+    for (const a of before) {
+      if (!still.has(a.key)) await clearNotifyDedup(a.key);
     }
   }
-  return sent;
+
+  // ── 2) Offline ONUs ──────────────────────────────────────────────────────
+  let cursor = 0;
+  for (;;) {
+    const rows = await prisma.onu.findMany({
+      where: {
+        id: { gt: cursor },
+        AND: [{ state: { not: null } }, { NOT: { state: "working" } }],
+        ...(offlineOltIds.size ? { oltId: { notIn: [...offlineOltIds] } } : {}),
+      },
+      orderBy: { id: "asc" },
+      take: CHUNK,
+      select: {
+        id: true,
+        name: true,
+        serial: true,
+        state: true,
+        mgmtIp: true,
+        ponPort: true,
+        oltId: true,
+        olt: { select: { name: true } },
+      },
+    });
+    if (rows.length === 0) break;
+    cursor = rows[rows.length - 1]!.id;
+
+    const inputs: OpenAlarmInput[] = rows.map((o) => {
+      const key = `onu.offline:${o.id}`;
+      mark("onu.offline", key);
+      return {
+        key,
+        type: "onu.offline" as const,
+        severity: "critical" as const,
+        oltId: o.oltId,
+        onuId: o.id,
+        title: `${o.name || o.ponPort} — offline`,
+        detail: `${o.olt.name} · ${o.state ?? "offline"} · ${whoLabel(o)}`,
+        href: `/onus/${o.id}`,
+      };
+    });
+    notified += await openAndNotify(inputs);
+    if (rows.length < CHUNK) break;
+  }
+  {
+    const before = await prisma.alarm.findMany({
+      where: { type: "onu.offline", clearedAt: null },
+      select: { key: true },
+    });
+    await clearAlarmsExcept("onu.offline", activeKeys.get("onu.offline") ?? new Set());
+    const still = activeKeys.get("onu.offline") ?? new Set();
+    for (const a of before) {
+      if (!still.has(a.key)) await clearNotifyDedup(a.key);
+    }
+  }
+
+  // ── 3) Weak / danger signal ──────────────────────────────────────────────
+  cursor = 0;
+  for (;;) {
+    const rows = await prisma.onu.findMany({
+      where: {
+        id: { gt: cursor },
+        state: "working",
+        lastOnuRx: { not: null, lt: thresholds.weakAlarm },
+        ...(offlineOltIds.size ? { oltId: { notIn: [...offlineOltIds] } } : {}),
+      },
+      orderBy: { id: "asc" },
+      take: CHUNK,
+      select: {
+        id: true,
+        name: true,
+        serial: true,
+        mgmtIp: true,
+        ponPort: true,
+        oltId: true,
+        lastOnuRx: true,
+        olt: { select: { name: true } },
+      },
+    });
+    if (rows.length === 0) break;
+    cursor = rows[rows.length - 1]!.id;
+
+    const weakInputs: OpenAlarmInput[] = [];
+    const dangerInputs: OpenAlarmInput[] = [];
+    for (const o of rows) {
+      const rx = o.lastOnuRx!;
+      const weakKey = `onu.signal.warning:${o.id}`;
+      mark("onu.signal.warning", weakKey);
+      weakInputs.push({
+        key: weakKey,
+        type: "onu.signal.warning",
+        severity: "warning",
+        oltId: o.oltId,
+        onuId: o.id,
+        title: `${o.name || o.ponPort} — ${rx} dBm`,
+        detail: `${o.olt.name} · sinjal i dobët · ${whoLabel(o)}`,
+        href: `/onus/${o.id}`,
+      });
+      if (rx <= thresholds.danger) {
+        const dangerKey = `onu.signal.danger:${o.id}`;
+        mark("onu.signal.danger", dangerKey);
+        dangerInputs.push({
+          key: dangerKey,
+          type: "onu.signal.danger",
+          severity: "critical",
+          oltId: o.oltId,
+          onuId: o.id,
+          title: `${o.name || o.ponPort} — ${rx} dBm`,
+          detail: `${o.olt.name} · ≤ ${thresholds.danger} dBm · ${whoLabel(o)}`,
+          href: `/onus/${o.id}`,
+        });
+      }
+    }
+    notified += await openAndNotify(weakInputs);
+    notified += await openAndNotify(dangerInputs);
+    if (rows.length < CHUNK) break;
+  }
+  for (const type of ["onu.signal.warning", "onu.signal.danger"] as AlarmType[]) {
+    const before = await prisma.alarm.findMany({
+      where: { type, clearedAt: null },
+      select: { key: true },
+    });
+    await clearAlarmsExcept(type, activeKeys.get(type) ?? new Set());
+    const still = activeKeys.get(type) ?? new Set();
+    for (const a of before) {
+      if (!still.has(a.key)) await clearNotifyDedup(a.key);
+    }
+  }
+
+  // ── 4) Expiry ────────────────────────────────────────────────────────────
+  cursor = 0;
+  for (;;) {
+    const rows = await prisma.onu.findMany({
+      where: { id: { gt: cursor }, expiration: { lte: expiryCutoff } },
+      orderBy: { id: "asc" },
+      take: CHUNK,
+      select: {
+        id: true,
+        name: true,
+        serial: true,
+        mgmtIp: true,
+        ponPort: true,
+        oltId: true,
+        expiration: true,
+        olt: { select: { name: true } },
+      },
+    });
+    if (rows.length === 0) break;
+    cursor = rows[rows.length - 1]!.id;
+
+    const inputs: OpenAlarmInput[] = [];
+    for (const o of rows) {
+      if (!o.expiration) continue;
+      const days = Math.floor((o.expiration.getTime() - now) / 86_400_000);
+      const key = `onu.expiry:${o.id}`;
+      mark("onu.expiry", key);
+      const when = days < 0 ? `skadoi ${-days} ditë më parë` : `skadon pas ${days} ditë`;
+      inputs.push({
+        key,
+        type: "onu.expiry",
+        severity: days < 0 ? "critical" : "warning",
+        oltId: o.oltId,
+        onuId: o.id,
+        title: `${o.name || o.ponPort} — skadencë`,
+        detail: `${o.olt.name} · ${when} · ${whoLabel(o)}`,
+        href: `/onus/${o.id}`,
+      });
+    }
+    notified += await openAndNotify(inputs);
+    if (rows.length < CHUNK) break;
+  }
+  {
+    const before = await prisma.alarm.findMany({
+      where: { type: "onu.expiry", clearedAt: null },
+      select: { key: true },
+    });
+    await clearAlarmsExcept("onu.expiry", activeKeys.get("onu.expiry") ?? new Set());
+    const still = activeKeys.get("onu.expiry") ?? new Set();
+    for (const a of before) {
+      if (!still.has(a.key)) await clearNotifyDedup(a.key);
+    }
+  }
+
+  // ── 5) PON-port outages ──────────────────────────────────────────────────
+  const portRows = await prisma.$queryRaw<
+    { olt_id: number; olt_name: string; port: string; total: bigint; offline: bigint }[]
+  >`
+    SELECT
+      t.olt_id,
+      t.olt_name,
+      t.port,
+      count(*)::bigint AS total,
+      count(*) FILTER (WHERE t.state IS NOT NULL AND t.state <> 'working')::bigint AS offline
+    FROM (
+      SELECT
+        o."oltId" AS olt_id,
+        l.name AS olt_name,
+        o.state AS state,
+        regexp_replace(
+          regexp_replace(
+            regexp_replace(o."ponPort", ':[0-9]+$', ''),
+            '^gpon-onu_', 'gpon-olt_'
+          ),
+          '^epon-onu_', 'epon-olt_'
+        ) AS port
+      FROM "Onu" o
+      JOIN "Olt" l ON l.id = o."oltId"
+      WHERE l.status IS DISTINCT FROM 'offline'
+    ) t
+    GROUP BY t.olt_id, t.olt_name, t.port
+    HAVING count(*) >= ${PORT_MIN_ONUS}
+      AND count(*) FILTER (WHERE t.state IS NOT NULL AND t.state <> 'working')::float
+          / count(*)::float >= ${PORT_WARNING}
+  `;
+
+  const portInputs: OpenAlarmInput[] = [];
+  for (const p of portRows) {
+    const total = Number(p.total);
+    const offline = Number(p.offline);
+    const ratio = offline / total;
+    const key = `pon.outage:${p.olt_id}:${p.port}`;
+    mark("pon.outage", key);
+    const shortPort = p.port.replace("gpon-olt_", "").replace("epon-olt_", "");
+    portInputs.push({
+      key,
+      type: "pon.outage",
+      severity: ratio >= PORT_CRITICAL ? "critical" : "warning",
+      oltId: p.olt_id,
+      title: `${p.olt_name} · porti ${shortPort} — ${offline}/${total} ONU offline`,
+      detail: "Mundësi problem karte/fibri (blast radius)",
+      href: "/onus",
+      detailJson: { port: p.port, total, offline, ratio },
+    });
+  }
+  notified += await openAndNotify(portInputs);
+  {
+    const before = await prisma.alarm.findMany({
+      where: { type: "pon.outage", clearedAt: null },
+      select: { key: true },
+    });
+    await clearAlarmsExcept("pon.outage", activeKeys.get("pon.outage") ?? new Set());
+    const still = activeKeys.get("pon.outage") ?? new Set();
+    for (const a of before) {
+      if (!still.has(a.key)) await clearNotifyDedup(a.key);
+    }
+  }
+
+  void clearRecovered;
+  return notified;
 }

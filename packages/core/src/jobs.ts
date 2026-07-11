@@ -21,6 +21,12 @@ export const JOB_NAMES = {
   syncDetail: "sync-detail",
   syncSignals: "sync-signals",
   snmpDiscover: "snmp-discover",
+  backup: "backup",
+  backupVerify: "backup-verify",
+  acsMirror: "acs-mirror",
+  acsRefresh: "acs-refresh",
+  acsFactoryReset: "acs-factory-reset",
+  acsCheckRegistration: "acs-check-registration",
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -77,6 +83,8 @@ export interface WifiPayload {
   pass2g?: string;
   ssid5g?: string;
   pass5g?: string;
+  enable2g?: boolean;
+  enable5g?: boolean;
 }
 export interface ReplaceOnuPayload {
   oltId: number;
@@ -119,6 +127,26 @@ export interface SyncSignalsPayload {
 }
 export interface SnmpDiscoverPayload {
   oltId: number;
+}
+export interface BackupPayload {
+  runId: number;
+  targetId?: number | null;
+}
+export interface BackupVerifyPayload {
+  runId: number;
+}
+export interface AcsRefreshPayload {
+  onuId: number;
+  serial: string;
+}
+export interface AcsFactoryResetPayload {
+  onuId: number;
+  deviceId: string;
+}
+export interface AcsCheckRegistrationPayload {
+  serial: string;
+  onuId?: number;
+  oltId?: number;
 }
 
 /** Redacts password-bearing strings before persisting raw device output / payloads. */

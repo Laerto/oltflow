@@ -6,5 +6,7 @@ export * from "./crypto.js";
 export * from "./schemas.js";
 export * from "./jobs.js";
 export * from "./roles.js";
+export * from "./permissions.js";
+export * from "./notifications.js";
 export * from "./tickets.js";
 export * from "./odn.js";

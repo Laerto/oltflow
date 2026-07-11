@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
+import dynamic from "next/dynamic";
 import {
   Activity,
   Plug,
@@ -23,11 +23,43 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/stat-card";
-import { OltCardMap } from "@/components/olt-card-map";
-import { PonTrafficCard } from "@/components/pon-traffic-card";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useOlts } from "./providers";
+
+// recharts is heavy (~1 KB icons aside, ~100 KB gz). Keep it out of the dashboard's
+// initial bundle — the health card streams its own chunk after the shell paints.
+const OltHealthCard = dynamic(
+  () => import("@/components/olt-health-card").then((m) => m.OltHealthCard),
+  { ssr: false, loading: () => <Skeleton className="h-40 w-full" /> }
+);
+
+/** Dependency-free sparkline (replaces a full recharts LineChart for 20 points). */
+function Sparkline({ data }: { data: number[] }) {
+  const w = 300;
+  const h = 140;
+  if (data.length === 0) return null;
+  const max = Math.max(1, ...data);
+  const min = Math.min(...data);
+  const range = Math.max(1, max - min);
+  const step = data.length > 1 ? w / (data.length - 1) : w;
+  const pts = data
+    .map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / range) * (h - 8) - 4).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-full w-full">
+      <polyline
+        points={pts}
+        fill="none"
+        stroke="var(--color-primary)"
+        strokeWidth={2}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+import { useOlts } from "../providers";
 import { api, type AuditEntry } from "@/lib/api";
 
 interface ExpiringClient {
@@ -262,11 +294,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-5">
-        <PonTrafficCard oltId={currentOlt.id} />
-      </div>
-
-      <div className="mb-5">
-        <OltCardMap oltId={currentOlt.id} />
+        <OltHealthCard oltId={currentOlt.id} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
@@ -279,12 +307,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="h-[140px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={history}>
-                    <YAxis hide domain={[0, "auto"]} />
-                    <Line type="monotone" dataKey="on" stroke="var(--color-primary)" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <Sparkline data={history.map((h) => h.on)} />
               </div>
             </CardContent>
           </Card>

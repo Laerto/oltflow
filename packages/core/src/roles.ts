@@ -60,6 +60,8 @@ export const userUpdateSchema = z
     password: z.string().min(6).max(200).optional(),
     oltIds: z.array(z.number().int().positive()).optional(),
     telegramChatId: z.string().trim().max(64).optional(),
+    /** pending | active | disabled — admin approval of self-signups. */
+    status: z.enum(["pending", "active", "disabled"]).optional(),
   })
   .refine(
     (v) =>
@@ -67,7 +69,8 @@ export const userUpdateSchema = z
       v.role !== undefined ||
       v.password !== undefined ||
       v.oltIds !== undefined ||
-      v.telegramChatId !== undefined,
+      v.telegramChatId !== undefined ||
+      v.status !== undefined,
     { message: "Asgjë për të ndryshuar" }
   );
 

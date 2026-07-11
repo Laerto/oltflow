@@ -118,11 +118,35 @@ export const wifiUpdateSchema = z.object({
   pass2g: z.string().optional(),
   ssid5g: z.string().optional(),
   pass5g: z.string().optional(),
+  // Radio on/off per band (TR-069 WLANConfiguration.Enable). Omitted ⇒ leave unchanged.
+  enable2g: z.boolean().optional(),
+  enable5g: z.boolean().optional(),
 });
 
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+});
+
+export const signupSchema = z.object({
+  email: z.string().email().max(200),
+  name: z.string().trim().min(1).max(80),
+  password: z.string().min(8).max(200),
+  /** Optional invite token (pre-verified registration). */
+  inviteToken: z.string().min(16).max(200).optional(),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(16).max(200),
+  password: z.string().min(8).max(200),
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(16).max(200),
 });
 
 export type CreateOltInput = z.infer<typeof createOltSchema>;
@@ -135,3 +159,4 @@ export type WifiUpdateInput = z.infer<typeof wifiUpdateSchema>;
 export type ReplaceOnuInput = z.infer<typeof replaceOnuSchema>;
 export type RebootOnuInput = z.infer<typeof rebootOnuSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type SignupInput = z.infer<typeof signupSchema>;

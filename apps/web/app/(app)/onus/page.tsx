@@ -198,14 +198,27 @@ function OnusContent() {
   const urlFilter = searchParams.get("filter");
   const urlSignal = searchParams.get("signal");
   const [onus, setOnus] = useState<OnuRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  // Debounced search so we don't hit the API on every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
-    urlFilter === "online" || urlFilter === "offline" ? urlFilter : "all"
+    urlFilter === "online" || urlFilter === "offline"
+      ? urlFilter
+      : urlFilter === "low-signal"
+        ? "online"
+        : "all"
   );
   const [brFilter, setBrFilter] = useState<BrFilter>("all");
   const [signalBand, setSignalBand] = useState<SignalBand>(
-    urlSignal === "good" || urlSignal === "warning" || urlSignal === "critical" ? urlSignal : "all"
+    urlSignal === "good" || urlSignal === "warning" || urlSignal === "critical"
+      ? urlSignal
+      : urlFilter === "low-signal"
+        ? "critical"
+        : "all"
   );
   const [sortExpiry, setSortExpiry] = useState(false);
   const [comfortable, setComfortable] = useState(false);
@@ -217,18 +230,59 @@ function OnusContent() {
   // A non-empty search always queries the WHOLE fleet, so a technician can find any customer
   // by SN/port/name straight away — no need to first pick their OLT. An empty search shows the
   // OLT selected in the header. `multiOlt` drives the extra OLT column in fleet-wide results.
-  const searching = search.trim().length > 0;
+  const searching = debouncedSearch.trim().length > 0;
   const multiOlt = searching;
 
-  async function load() {
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  async function fetchPage(opts: { append: boolean; cursor?: number | null }) {
     if (!searching && !currentOlt) return;
-    setLoading(true);
+    if (opts.append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const { onus } = searching ? await api.allOnus() : await api.onus(currentOlt!.id);
-      setOnus(onus);
+      // status + signal + q go server-side (keyset pages). Bridge/route stays client-side
+      // on the loaded pages (small enum, not worth a DB column yet).
+      const params = {
+        q: debouncedSearch.trim() || undefined,
+        status: statusFilter,
+        signal: signalBand,
+        cursor: opts.cursor ?? undefined,
+        limit: 100,
+      };
+      const res = searching ? await api.allOnus(params) : await api.onus(currentOlt!.id, params);
+      setOnus((prev) => (opts.append ? [...prev, ...res.onus] : res.onus));
+      setTotal(res.total);
+      setNextCursor(res.nextCursor);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  }
+
+  function load() {
+    setSelected(new Set());
+    return fetchPage({ append: false });
+  }
+
+  // Full filtered fleet, not just the loaded page — streamed server-side.
+  function exportFilteredCsv() {
+    const p = new URLSearchParams();
+    const term = debouncedSearch.trim();
+    if (term) p.set("q", term);
+    if (statusFilter !== "all") p.set("status", statusFilter);
+    if (signalBand !== "all") p.set("signal", signalBand);
+    if (!searching && currentOlt) p.set("oltId", String(currentOlt.id));
+    const a = document.createElement("a");
+    a.href = `/api/onus/export?${p.toString()}`;
+    a.click();
+  }
+
+  function loadMore() {
+    if (nextCursor == null || loadingMore) return;
+    return fetchPage({ append: true, cursor: nextCursor });
   }
 
   function toggle(id: number) {
@@ -271,19 +325,16 @@ function OnusContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentOlt?.id, searching]);
+  }, [currentOlt?.id, searching, debouncedSearch, statusFilter, signalBand]);
 
+  // Server already applied status/signal/q. Client only: bridge/route + optional sorts.
   const base = onus
-    .filter((o) => statusFilter === "all" || (statusFilter === "online" ? o.state === "working" : o.state !== "working"))
-    .filter((o) => urlFilter !== "low-signal" || isLowSignal(o.onuRx))
     .filter((o) => brFilter === "all" || onuConnectionKind(o.type) === brFilter)
-    // Optical signal band filter: good / warning / critical (near LOSS).
-    .filter((o) => signalBand === "all" || classifySignal(o.onuRx) === signalBand)
-    .filter((o) => `${o.ponPort}${o.serial ?? ""}${o.name ?? ""}${o.type ?? ""}`.toLowerCase().includes(search.toLowerCase()));
+    .filter((o) => urlFilter !== "low-signal" || isLowSignal(o.onuRx));
 
   // Ordering precedence: an explicit Skadenca sort wins; otherwise, when a signal band is
   // selected, auto-order by optical quality so an audit reads top-to-bottom by priority
-  // (see sortBySignalBand); else keep the natural port order.
+  // (see sortBySignalBand); else keep the natural keyset order.
   const filtered = sortExpiry
     ? [...base].sort((a, b) => {
         const ax = a.expiration ? new Date(a.expiration).getTime() : null;
@@ -317,7 +368,9 @@ function OnusContent() {
               {searching ? "ONU-të — Kërkim në të gjitha OLT-të" : "ONU-të e Konfiguruara"}
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {searching ? `${olts.length} OLT` : currentOlt?.name} · {filtered.length} nga {onus.length} ONU
+              {searching ? `${olts.length} OLT` : currentOlt?.name} · {filtered.length} të ngarkuara
+              {total > 0 ? ` · ${total} gjithsej` : ""}
+              {brFilter !== "all" ? " (tipi: filtru lokal)" : ""}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -329,7 +382,7 @@ function OnusContent() {
             >
               {comfortable ? <Rows3 className="h-4 w-4" /> : <Rows4 className="h-4 w-4" />}
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => exportCsv(filtered)} title="Eksporto CSV (të filtruarat)">
+            <Button variant="secondary" size="sm" onClick={exportFilteredCsv} title="Eksporto CSV (të gjitha rreshtat që përputhen)">
               <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
             </Button>
             <Button variant="secondary" size="sm" onClick={load} disabled={loading} title="Rifresko listën">
@@ -596,6 +649,19 @@ function OnusContent() {
               </TableBody>
             </Table>
           </div>
+
+          {nextCursor != null && (
+            <div className="mt-3 flex flex-col items-center gap-1.5">
+              <Button variant="secondary" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? "Duke ngarkuar..." : `Ngarko më shumë (${onus.length} / ${total})`}
+              </Button>
+              {brFilter !== "all" && (
+                <p className="text-center text-[11px] text-muted-foreground">
+                  Filtri Route/Bridge është lokal mbi faqet e ngarkuara — ngarko më shumë për të zgjeruar.
+                </p>
+              )}
+            </div>
+          )}
         </>
       )}
 

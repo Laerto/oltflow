@@ -1,9 +1,10 @@
 import { Worker, type Job as BullJob } from "bullmq";
-import { prisma } from "@oltflow/db";
+import { prisma, ensureDefaultSettings } from "@oltflow/db";
 import { JOB_NAMES, QUEUE_NAME, sanitizePayload } from "@oltflow/core";
 import { connection } from "./redis.js";
 import { writeAudit } from "./audit.js";
 import { startScheduler } from "./scheduler.js";
+import { initLogger, log } from "./logger.js";
 import { syncOlt } from "./sync/olt-sync.js";
 import { handleOltConnectTest } from "./handlers/oltConnectTest.js";
 import { handleScanUnconfigured } from "./handlers/scanUnconfigured.js";
@@ -21,6 +22,13 @@ import { handleEnableWanAccess } from "./handlers/enableWanAccess.js";
 import { handlePushAcs } from "./handlers/pushAcs.js";
 import { handleRebootOnu } from "./handlers/rebootOnu.js";
 import { handleRebootOnuCli } from "./handlers/rebootOnuCli.js";
+import { handleBackup, handleBackupVerify } from "./handlers/backup.js";
+import { handleAcsRefresh } from "./handlers/acsRefresh.js";
+import { handleAcsFactoryReset } from "./handlers/acsFactoryReset.js";
+import { handleAcsCheckRegistration } from "./handlers/acsCheckRegistration.js";
+import { syncAcsMirror } from "./sync/acs-mirror.js";
+import { startWhatsapp } from "./whatsapp/manager.js";
+import { startTelegramBot } from "./telegram-bot.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Handler = (payload: any) => Promise<unknown>;
@@ -42,13 +50,19 @@ const HANDLERS: Record<string, Handler> = {
   [JOB_NAMES.pushAcs]: handlePushAcs,
   [JOB_NAMES.rebootOnu]: handleRebootOnu,
   [JOB_NAMES.rebootOnuCli]: handleRebootOnuCli,
+  [JOB_NAMES.backup]: handleBackup,
+  [JOB_NAMES.backupVerify]: handleBackupVerify,
+  [JOB_NAMES.acsRefresh]: handleAcsRefresh,
+  [JOB_NAMES.acsFactoryReset]: handleAcsFactoryReset,
+  [JOB_NAMES.acsCheckRegistration]: handleAcsCheckRegistration,
 };
 
 // Untracked: driven by the scheduler, no Job row / AuditLog (would flood both). One combined,
 // deduped sweep per OLT — it self-skips (returns 0) when the OLT is busy with a user action,
 // so nothing is re-enqueued and the queue never piles up.
-const UNTRACKED_HANDLERS: Record<string, (payload: { oltId: number }) => Promise<unknown>> = {
-  [JOB_NAMES.syncOlt]: (p) => syncOlt(p.oltId),
+const UNTRACKED_HANDLERS: Record<string, (payload: Record<string, unknown>) => Promise<unknown>> = {
+  [JOB_NAMES.syncOlt]: (p) => syncOlt(p.oltId as number),
+  [JOB_NAMES.acsMirror]: () => syncAcsMirror(),
 };
 
 async function processJob(job: BullJob) {
@@ -107,10 +121,28 @@ async function processJob(job: BullJob) {
 const WORKER_CONCURRENCY = Number(process.env.WORKER_CONCURRENCY ?? 20);
 const worker = new Worker(QUEUE_NAME, processJob, { connection, concurrency: WORKER_CONCURRENCY });
 
-worker.on("ready", () => console.log(`[worker] listening on queue "${QUEUE_NAME}"`));
-worker.on("failed", (job, err) => console.error(`[worker] job ${job?.id} (${job?.name}) failed:`, err.message));
+worker.on("ready", () => log.info({ queue: QUEUE_NAME, concurrency: WORKER_CONCURRENCY }, "worker ready"));
+worker.on("failed", (job, err) =>
+  log.error({ jobId: job?.id, jobName: job?.name, err: err.message }, "job failed")
+);
 
-startScheduler();
+async function boot() {
+  await initLogger();
+  const seeded = await ensureDefaultSettings().catch((err) => {
+    log.warn({ err: String(err) }, "settings seed failed (will use env defaults)");
+    return 0;
+  });
+  if (seeded) log.info({ seeded }, "default settings seeded");
+  await startScheduler();
+  // Persistent WhatsApp (Baileys) socket + control channel. Failure here must not
+  // block the worker — notifications on other channels keep working.
+  await startWhatsapp().catch((err) => log.warn({ err: String(err) }, "whatsapp start failed"));
+  // Inbound Telegram command bot (getUpdates long-poll). Runs in the background; its own
+  // loop swallows errors, so no await — it must never block boot.
+  void startTelegramBot().catch((err) => log.warn({ err: String(err) }, "telegram bot start failed"));
+}
+
+void boot();
 
 process.on("SIGTERM", () => {
   void worker.close().then(() => process.exit(0));

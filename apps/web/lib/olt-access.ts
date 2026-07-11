@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
-import { roleRank, TIER } from "@oltflow/core";
+import { roleRank, TIER, type Tier } from "@oltflow/core";
 import { prisma } from "@oltflow/db";
 import { getSession, type SessionPayload } from "./auth";
+
+/**
+ * Guard for mutating routes: 401 if unauthenticated, 403 if the session's role is below
+ * `tier`, else null (allow). Defense-in-depth — proxy.ts already gates by (method, path),
+ * but every destructive handler re-asserts its tier so authorization never rests on the
+ * middleware alone (a matcher gap or a middleware-bypass bug can't grant a viewer write access).
+ */
+export async function guardTier(tier: Tier): Promise<NextResponse | null> {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  if (roleRank(session.role) < tier) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  return null;
+}
 
 /**
  * OLT ids a session may see/operate. Admins are never scoped, and a non-admin with NO

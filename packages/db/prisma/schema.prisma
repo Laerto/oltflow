@@ -33,10 +33,13 @@ model Olt {
   jobs        Job[]
   auditLogs   AuditLog[]
   ponTraffic  PonTraffic[]
+  health      OltHealth[]
   users       User[]    @relation("UserOlts") // support/viewer scoping (empty = all; admin ignores)
   tickets     Ticket[]
   splitters   Splitter[]
   fiberSegments FiberSegment[]
+  alarms      Alarm[]
+  maintenanceWindows MaintenanceWindow[]
   createdAt   DateTime  @default(now())
 }
 
@@ -120,13 +123,61 @@ model Onu {
   splitterId     Int? // ODN: which splitter port feeds this ONU (for topology + fault isolation)
   splitter       Splitter? @relation(fields: [splitterId], references: [id], onDelete: SetNull)
   lastSeen       DateTime?
+  /// Denormalized latest optical reading — written with every Signal insert so fleet
+  /// alarm ticks and signal-band filters can use indexed columns instead of DISTINCT ON
+  /// over the whole Signal history (critical at 50k–100k ONUs).
+  lastOnuRx       Float?
+  lastSignalLevel String? // good | warning | critical
+  lastSignalAt    DateTime?
   signals        Signal[]
   tickets        Ticket[]
+  alarms         Alarm[]
+  acsDevice      AcsDevice?
 
   @@unique([oltId, ponPort])
   @@index([serial])
   @@index([state])
   @@index([oltId, state]) // dashboard/list rollups: count + groupBy ONUs per OLT by state
+  @@index([name])
+  @@index([pppoeUser])
+  @@index([mgmtIp])
+  @@index([lastOnuRx])
+  @@index([lastSignalLevel])
+}
+
+/// GenieACS CPE mirror — pages read this instead of hammering the NBI on every load.
+/// Joined to Onu by serial when possible; deviceId is the GenieACS `_id`.
+model AcsDevice {
+  id               Int       @id @default(autoincrement())
+  deviceId         String    @unique // GenieACS _id
+  serial           String?
+  onuId            Int?      @unique
+  onu              Onu?      @relation(fields: [onuId], references: [id], onDelete: SetNull)
+  productClass     String?
+  modelName        String?
+  hardwareVersion  String?
+  softwareVersion  String?
+  wanIp            String?
+  wanMode          String? // PPPoE | DHCP | Static | unknown
+  uptimeSec        Int?
+  ssid2g           String?
+  ssid5g           String?
+  wifiEnabled2g    Boolean?
+  wifiEnabled5g    Boolean?
+  /// [{ hostname, mac, ip, active }]
+  lanHosts         Json?
+  lastInform       DateTime?
+  lastBootstrap    DateTime?
+  registered       Boolean   @default(true)
+  mirroredAt       DateTime  @default(now())
+  /// When provision expected this serial to appear in ACS (handshake check).
+  expectedBy       DateTime?
+
+  @@index([serial])
+  @@index([softwareVersion])
+  @@index([lastInform])
+  @@index([mirroredAt])
+  @@index([wanIp])
 }
 
 model Signal {
@@ -163,12 +214,32 @@ model PonTraffic {
   @@index([oltId, ponPort, recordedAt])
 }
 
+/// Per-card CPU% and temperature snapshots polled from the OLT over SNMP (see
+/// getOltHealth in @oltflow/adapters). One row per card per poll; the worker keeps ~24h
+/// so the dashboard can draw a short CPU/temp trend. Prunes itself in olt-health.ts.
+model OltHealth {
+  id         BigInt   @id @default(autoincrement())
+  oltId      Int
+  olt        Olt      @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  slot       Int // physical card slot
+  card       String // card model name, e.g. GTGHG
+  cpu        Float // percent 0-100
+  temp       Float // Celsius
+  recordedAt DateTime @default(now())
+
+  @@index([oltId, recordedAt])
+  @@index([oltId, slot, recordedAt])
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   name      String?
   passwordH String
   role      String   @default("operator") // admin | support | technician | viewer
+  /// Account lifecycle: pending (self-signup awaiting admin) | active | disabled.
+  status    String   @default("active") // pending | active | disabled
+  emailVerifiedAt DateTime?
   /// OLTs this user may see/operate. Empty = all (backward compatible, unrestricted);
   /// admins are never scoped. Assign specific OLTs to restrict support to their zone.
   olts      Olt[]    @relation("UserOlts")
@@ -176,7 +247,222 @@ model User {
   telegramChatId  String?
   openedTickets   Ticket[] @relation("TicketOpenedBy")
   assignedTickets Ticket[] @relation("TicketAssignedTo")
+  sessions        Session[]
+  settingsUpdated Setting[] @relation("SettingUpdatedBy")
+  alarmsAcked     Alarm[]   @relation("AlarmAckedBy")
+  permissions     UserPermission[]
+  verificationTokens VerificationToken[]
   createdAt DateTime @default(now())
+
+  @@index([status])
+}
+
+/// One-time tokens for email verify / password reset / admin invite. Token stored hashed.
+model VerificationToken {
+  id        String    @id // random uuid
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String // verify | reset | invite
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tokenHash])
+  @@index([userId, kind])
+}
+
+/// Seeded catalogue of granular capabilities (onu.reboot, users.manage, …).
+/// Role defaults live in code (@oltflow/core); per-user grants/denies are UserPermission rows.
+model Permission {
+  id          String @id // e.g. "onu.reboot"
+  label       String
+  description String?
+  group       String // onu | olt | tickets | map | admin | system
+}
+
+/// Per-user override of a permission. `allow=true` grants even if the role lacks it;
+/// `allow=false` denies even if the role has it. Admins always pass authorize().
+model UserPermission {
+  userId Int
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  perm   String // Permission.id
+  allow  Boolean
+
+  @@id([userId, perm])
+  @@index([perm])
+}
+
+/// Browser/API session (DB-backed). The signed cookie carries the session id as JWT `jti`;
+/// revocation and "active sessions" admin views read this table. ExpiresAt mirrors the
+/// cookie TTL; lastSeenAt is throttled so busy dashboards don't hammer the row every poll.
+model Session {
+  id         String    @id // random uuid — JWT jti
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+/// Runtime-configurable knobs (signal thresholds, sync intervals, retention, locale…).
+/// Seeded with defaults from @oltflow/core; admin UI (Phase 2) edits them; worker/web
+/// hot-reload via a short-lived in-process cache. Bootstrap secrets stay in .env.
+model Setting {
+  key         String   @id
+  value       Json
+  updatedById Int?
+  updatedBy   User?    @relation("SettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt   DateTime @updatedAt
+}
+
+/// Persisted NOC alarm. The worker opens/clears rows each tick; /api/alarms is a cheap
+/// indexed read (no fleet scan). `key` is the stable open-alarm identity used for upsert
+/// (e.g. "onu.offline:123", "olt.unreachable:5", "pon.outage:5:gpon-olt_1/1/1").
+model Alarm {
+  id            BigInt    @id @default(autoincrement())
+  key           String    @unique
+  type          String // onu.offline | onu.signal.warning | onu.signal.danger | onu.expiry | olt.unreachable | pon.outage
+  severity      String // critical | warning
+  oltId         Int?
+  olt           Olt?      @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  onuId         Int?
+  onu           Onu?      @relation(fields: [onuId], references: [id], onDelete: Cascade)
+  title         String
+  detail        String?
+  href          String?
+  openedAt      DateTime  @default(now())
+  clearedAt     DateTime?
+  lastSeenAt    DateTime  @default(now())
+  ackedById     Int?
+  ackedBy       User?     @relation("AlarmAckedBy", fields: [ackedById], references: [id], onDelete: SetNull)
+  ackedAt       DateTime?
+  silencedUntil DateTime?
+  detailJson    Json?
+
+  @@index([clearedAt, severity])
+  @@index([type, clearedAt])
+  @@index([oltId, clearedAt])
+  @@index([onuId, clearedAt])
+  @@index([openedAt])
+}
+
+/// External integration config (Telegram, SMTP, GenieACS, …). Secrets live in
+/// `configEnc` (AES-GCM JSON via OLT_CRED_KEY). Env vars remain bootstrap fallback.
+model Integration {
+  id           String    @id // telegram | whatsapp | smtp | webhook | genieacs | radius | winbox
+  enabled      Boolean   @default(false)
+  configEnc    String? // AES-GCM encrypted JSON blob
+  status       String? // ok | error | unconfigured | unknown
+  statusDetail String?
+  lastCheckAt  DateTime?
+  updatedAt    DateTime  @updatedAt
+  updatedById  Int?
+}
+
+/// Admin-editable notification rule: event type × severity × scope × channel(s) × behavior.
+/// Seeded with today's Telegram alarm behaviour so nothing regresses on upgrade.
+model NotificationRule {
+  id               Int      @id @default(autoincrement())
+  name             String
+  eventType        String // onu.offline | onu.signal.warning | onu.signal.danger | onu.expiry | olt.unreachable | pon.outage | ...
+  severityMin      String? // warning | critical | null = any
+  enabled          Boolean  @default(true)
+  scopeAll         Boolean  @default(true) // false → only oltIds
+  oltIds           Int[]    @default([])
+  /// [{ "type": "telegram", "chatId"?: "..." }, { "type": "smtp", "to": ["a@b.c"] }, { "type": "webhook" }, { "type": "whatsapp", "to": "+355..." }]
+  channels         Json
+  behavior         String   @default("once_until_clear") // once_until_clear | daily | every
+  quietStart       String? // "HH:MM" local (Europe/Tirane-ish; wall clock on server)
+  quietEnd         String?
+  escalateAfterMin Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([eventType, enabled])
+}
+
+/// Every delivery attempt — "did the alert go out?" is answerable from admin.
+model NotificationLog {
+  id        BigInt   @id @default(autoincrement())
+  ruleId    Int?
+  eventType String
+  channel   String // telegram | smtp | webhook | whatsapp
+  status    String // sent | failed | skipped
+  error     String?
+  target    String? // chat id / email / webhook url (no secrets)
+  detail    Json?
+  alarmKey  String?
+  oltId     Int?
+  onuId     Int?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([eventType, createdAt])
+  @@index([status, createdAt])
+  @@index([alarmKey, createdAt])
+}
+
+/// Suppress alarms/notifications for a scheduled window (per OLT or fleet-wide).
+model MaintenanceWindow {
+  id          Int      @id @default(autoincrement())
+  name        String
+  oltId       Int? // null = all OLTs
+  olt         Olt?     @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String?
+  createdById Int?
+  createdAt   DateTime @default(now())
+
+  @@index([startsAt, endsAt])
+  @@index([oltId, startsAt])
+}
+
+/// Where backups are written: local volume and/or SSH/SFTP off-site.
+/// configEnc holds AES-GCM JSON (path, host, port, user, key/password, remotePath).
+model BackupTarget {
+  id         Int      @id @default(autoincrement())
+  kind       String // local | ssh
+  name       String
+  configEnc  String // encrypted JSON
+  /// Simple schedule: "" = manual only; "daily:03:00"; "weekly:sun:03:00"
+  schedule   String?
+  /// { "keepLast": 7, "keepWeekly": 4 }
+  retention  Json?
+  enabled    Boolean  @default(true)
+  lastRunAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  runs       BackupRun[]
+}
+
+/// One backup execution (manual or scheduled). Artifacts live on disk / remote;
+/// this row is the index for admin UI + restore commands.
+model BackupRun {
+  id         Int       @id @default(autoincrement())
+  targetId   Int?
+  target     BackupTarget? @relation(fields: [targetId], references: [id], onDelete: SetNull)
+  status     String    @default("queued") // queued | running | success | failed | verified
+  /// Relative path under BACKUP_DIR, e.g. runs/2026-07-09T12-00-00Z
+  path       String?
+  sizeBytes  BigInt?
+  sha256     String?
+  manifest   Json?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  error      String?
+  log        String? // truncated run log
+  verifiedAt DateTime?
+
+  @@index([status, startedAt])
+  @@index([targetId, startedAt])
 }
 
 /// Trouble ticket for fault repair: office opens (often from a bad-signal ONU), assigns a
@@ -238,5 +524,14 @@ model Job {
   output    String? // raw device output (troubleshooting)
   error     String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Baileys (WhatsApp Web multi-device) auth store. One row for "creds", one per
+// signal key ("key:<type>:<id>"). `data` is AES-GCM encrypted BufferJSON — this is
+// a full WhatsApp session, so it must never be stored in plaintext.
+model WhatsappAuth {
+  id        String   @id
+  data      String
   updatedAt DateTime @updatedAt
 }

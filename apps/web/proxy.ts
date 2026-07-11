@@ -6,7 +6,25 @@ import { jwtVerify } from "jose";
 // see node_modules/next/dist/docs/.../proxy.md. This is the single authorization gate:
 // authentication (valid session) + role-tier authorization by (method, path).
 const SESSION_COOKIE = "oltflow_session";
-const PUBLIC_PATHS = ["/login", "/api/login", "/api/logout", "/api/health"];
+
+// Public marketing + auth pages (no session required).
+const PUBLIC_PATHS = [
+  "/",
+  "/login",
+  "/signup",
+  "/verify",
+  "/forgot",
+  "/reset",
+  "/api/login",
+  "/api/logout",
+  "/api/signup",
+  "/api/verify",
+  "/api/forgot",
+  "/api/reset",
+  "/api/auth/config",
+  "/api/health",
+  "/api/metrics",
+];
 
 // Inlined role logic (edge-safe — importing @oltflow/core would pull in node:crypto).
 // Keep in sync with packages/core/src/roles.ts.
@@ -33,27 +51,26 @@ const RULES: Rule[] = [
   { method: "POST", re: /^\/api\/olts\/\d+\/snmp-discover$/, tier: TIER.ADMIN },
   { method: "DELETE", re: /^\/api\/onus\/\d+$/, tier: TIER.ADMIN },
   { method: "POST", re: /^\/api\/onus\/\d+\/replace$/, tier: TIER.ADMIN },
-  { re: /^\/users(\/|$)/, tier: TIER.ADMIN }, // Users admin page
-  // ── OPERATE (support + admin) ────────────────────────────────────────────
-  { method: "GET", re: /^\/api\/technicians$/, tier: TIER.OPERATE }, // technician list for assign
-  { method: "POST", re: /^\/api\/splitters$/, tier: TIER.OPERATE }, // ODN plant editing
+  { re: /^\/users(\/|$)/, tier: TIER.ADMIN },
+  { re: /^\/admin(\/|$)/, tier: TIER.ADMIN },
+  { re: /^\/api\/admin(\/|$)/, tier: TIER.ADMIN },
+  // ── OPERATE ────────────────────────────────────────────────────────────
+  { method: "GET", re: /^\/api\/technicians$/, tier: TIER.OPERATE },
+  { method: "POST", re: /^\/api\/splitters$/, tier: TIER.OPERATE },
   { method: "PATCH", re: /^\/api\/splitters\/\d+$/, tier: TIER.OPERATE },
   { method: "DELETE", re: /^\/api\/splitters\/\d+$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/fiber$/, tier: TIER.OPERATE },
   { method: "DELETE", re: /^\/api\/fiber\/\d+$/, tier: TIER.OPERATE },
-  { method: "POST", re: /^\/api\/tickets$/, tier: TIER.OPERATE }, // open a ticket
-  { method: "PATCH", re: /^\/api\/tickets\/\d+$/, tier: TIER.OPERATE }, // (re)assign technician
-  // NOTE: GET /api/tickets(/id) + POST /api/tickets/id/action ⇒ VIEW default; the routes do
-  // the fine-grained check (assigned technician vs office, canWorkTickets).
+  { method: "POST", re: /^\/api\/tickets$/, tier: TIER.OPERATE },
+  { method: "PATCH", re: /^\/api\/tickets\/\d+$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/provision(\/.*)?$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/wifi\/update$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/onus\/\d+\/reboot$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/onus\/\d+\/restart$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/onus\/\d+\/wan-access$/, tier: TIER.OPERATE },
-  { method: "PATCH", re: /^\/api\/onus\/\d+$/, tier: TIER.OPERATE }, // set mgmt IP
+  { method: "PATCH", re: /^\/api\/onus\/\d+$/, tier: TIER.OPERATE },
   { method: "POST", re: /^\/api\/olts\/\d+\/scan-unconfigured$/, tier: TIER.OPERATE },
-  { re: /^\/provision(\/|$)/, tier: TIER.OPERATE }, // Provision page
-  // NOTE: /api/onus/[id]/live and /refresh are read-only in effect ⇒ VIEW (default).
+  { re: /^\/provision(\/|$)/, tier: TIER.OPERATE },
 ];
 
 function requiredTier(method: string, pathname: string): Tier {
@@ -64,13 +81,13 @@ function requiredTier(method: string, pathname: string): Tier {
   return TIER.VIEW;
 }
 
+function isPublic(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => pathname === p || (p !== "/" && pathname.startsWith(p + "/")));
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith("/api/");
-
-  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    return NextResponse.next();
-  }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   let role: string | null = null;
@@ -83,6 +100,15 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // Logged-in users hitting the marketing landing go straight to the NOC.
+  if (pathname === "/" && role) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (isPublic(pathname)) {
+    return NextResponse.next();
+  }
+
   if (!role) {
     if (isApi) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     const url = new URL("/login", request.url);
@@ -92,7 +118,7 @@ export async function proxy(request: NextRequest) {
 
   if (roleRank(role) < requiredTier(request.method, pathname)) {
     if (isApi) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-    return NextResponse.redirect(new URL("/", request.url)); // bounce off admin-only pages
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();

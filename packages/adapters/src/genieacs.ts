@@ -204,12 +204,57 @@ export async function getWifiInfo(genieacsUrl: string, serial: string): Promise<
   return result;
 }
 
+export interface LanPort {
+  /** 1-based physical port index → LAN1..LAN4. */
+  port: number;
+  /** Link up (cable connected). Status "Up" ⇒ true; "NoLink"/"Down"/"Disabled" ⇒ false. */
+  up: boolean;
+  /** Whether the port is administratively enabled. */
+  enabled: boolean;
+  name: string | null;
+}
+
+/** Live per-port physical LAN status (LANEthernetInterfaceConfig) for the ONU/CPE — used to
+ * draw the LAN1..LAN4 port strip. Best-effort; returns [] if the tree/param is absent. */
+export async function getLanPorts(genieacsUrl: string, deviceId: string): Promise<LanPort[]> {
+  const res = await fetch(
+    devicesUrl(genieacsUrl, {
+      query: { _id: deviceId },
+      projection: "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig",
+    })
+  ).catch(() => null);
+  if (!res || !res.ok) return [];
+  const devices = (await res.json()) as GenieDevice[];
+  const cfg = deepGet(devices[0], "InternetGatewayDevice", "LANDevice", "1", "LANEthernetInterfaceConfig") as
+    | Record<string, unknown>
+    | undefined;
+  if (!cfg) return [];
+  const ports: LanPort[] = [];
+  for (const [k, v] of Object.entries(cfg)) {
+    if (!/^\d+$/.test(k)) continue;
+    const status = deepGet(v, "Status", "_value");
+    const name = deepGet(v, "Name", "_value");
+    const enable = deepGet(v, "Enable", "_value");
+    ports.push({
+      port: Number(k),
+      up: status === "Up",
+      enabled: enable === true || enable === "true" || enable === 1,
+      name: typeof name === "string" ? name : null,
+    });
+  }
+  ports.sort((a, b) => a.port - b.port);
+  return ports;
+}
+
 export interface WifiUpdateParams {
   deviceId: string;
   ssid2g?: string;
   pass2g?: string;
   ssid5g?: string;
   pass5g?: string;
+  /** Radio on/off per band (WLANConfiguration.Enable). Omitted ⇒ leave unchanged. */
+  enable2g?: boolean;
+  enable5g?: boolean;
 }
 
 export interface WifiUpdateTaskResult {
@@ -232,6 +277,242 @@ export async function rebootDevice(genieacsUrl: string, deviceId: string): Promi
   return { status: res.status };
 }
 
+/** Issues a FactoryReset CWMP task via GenieACS NBI. */
+export async function factoryResetDevice(
+  genieacsUrl: string,
+  deviceId: string
+): Promise<{ status: number }> {
+  const url = `${genieacsUrl}/devices/${encodeURIComponent(deviceId)}/tasks?connection_request`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "factoryReset" }),
+  });
+  if (!res.ok) throw new Error(`GenieACS factoryReset dështoi: ${res.status}`);
+  return { status: res.status };
+}
+
+/** Ask the CPE to refresh a subtree on next inform (summon + refreshObject). */
+export async function refreshDeviceObject(
+  genieacsUrl: string,
+  deviceId: string,
+  objectName = "InternetGatewayDevice"
+): Promise<{ status: number }> {
+  const url = `${genieacsUrl}/devices/${encodeURIComponent(deviceId)}/tasks?connection_request`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "refreshObject", objectName }),
+  });
+  if (!res.ok) throw new Error(`GenieACS refreshObject dështoi: ${res.status}`);
+  return { status: res.status };
+}
+
+// ── ACS mirror helpers (Phase 6) ─────────────────────────────────────────────
+
+export interface LanHost {
+  hostname: string | null;
+  mac: string | null;
+  ip: string | null;
+  active: boolean;
+}
+
+export interface AcsDeviceSummary {
+  deviceId: string;
+  serial: string | null;
+  productClass: string | null;
+  modelName: string | null;
+  hardwareVersion: string | null;
+  softwareVersion: string | null;
+  wanIp: string | null;
+  wanMode: string | null;
+  uptimeSec: number | null;
+  ssid2g: string | null;
+  ssid5g: string | null;
+  wifiEnabled2g: boolean | null;
+  wifiEnabled5g: boolean | null;
+  lanHosts: LanHost[];
+  lastInform: Date | null;
+  lastBootstrap: Date | null;
+}
+
+const MIRROR_PROJECTION = [
+  "_id",
+  "_deviceId",
+  "_lastInform",
+  "_lastBootstrap",
+  "_registered",
+  "InternetGatewayDevice.DeviceInfo",
+  "InternetGatewayDevice.WANDevice",
+  "InternetGatewayDevice.LANDevice",
+  "InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
+].join(",");
+
+function valStr(...path: string[]): (d: GenieDevice) => string | null {
+  return (d) => {
+    const v = deepGet(d, ...path, "_value");
+    return typeof v === "string" && v.length ? v : null;
+  };
+}
+
+function extractSerial(d: GenieDevice): string | null {
+  const sn = valStr("InternetGatewayDevice", "DeviceInfo", "SerialNumber")(d);
+  if (sn) return sn.toUpperCase();
+  // GenieACS ids often look like OUI-SERIAL-PRODUCTCLASS
+  const id = String(d._id ?? "");
+  const parts = id.split("-");
+  if (parts.length >= 2 && parts[1] && parts[1].length >= 8) return parts[1]!.toUpperCase();
+  return null;
+}
+
+function extractWanMode(d: GenieDevice): string | null {
+  const wanDevices = deepGet(d, "InternetGatewayDevice", "WANDevice") as Record<string, unknown> | undefined;
+  if (!wanDevices) return null;
+  for (const wan of Object.values(wanDevices)) {
+    const connDevices = deepGet(wan, "WANConnectionDevice") as Record<string, unknown> | undefined;
+    if (!connDevices) continue;
+    for (const connDevice of Object.values(connDevices)) {
+      const ppp = deepGet(connDevice, "WANPPPConnection") as Record<string, unknown> | undefined;
+      if (ppp) {
+        for (const conn of Object.values(ppp)) {
+          const en = deepGet(conn, "Enable", "_value");
+          if (en === true || en === "true" || en === 1) return "PPPoE";
+        }
+      }
+      const ip = deepGet(connDevice, "WANIPConnection") as Record<string, unknown> | undefined;
+      if (ip) {
+        for (const conn of Object.values(ip)) {
+          const en = deepGet(conn, "Enable", "_value");
+          if (en === true || en === "true" || en === 1) {
+            const at = deepGet(conn, "AddressingType", "_value");
+            return typeof at === "string" ? at : "DHCP";
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function extractLanHosts(d: GenieDevice): LanHost[] {
+  const hosts: LanHost[] = [];
+  const lanDevices = deepGet(d, "InternetGatewayDevice", "LANDevice") as Record<string, unknown> | undefined;
+  if (!lanDevices) return hosts;
+  for (const lan of Object.values(lanDevices)) {
+    const hostsObj = deepGet(lan, "Hosts", "Host") as Record<string, unknown> | undefined;
+    if (!hostsObj) continue;
+    for (const h of Object.values(hostsObj)) {
+      if (!h || typeof h !== "object") continue;
+      const hostname = deepGet(h, "HostName", "_value");
+      const mac = deepGet(h, "MACAddress", "_value");
+      const ip = deepGet(h, "IPAddress", "_value");
+      const active = deepGet(h, "Active", "_value");
+      if (!mac && !ip) continue;
+      hosts.push({
+        hostname: typeof hostname === "string" ? hostname : null,
+        mac: typeof mac === "string" ? mac : null,
+        ip: typeof ip === "string" ? ip : null,
+        active: active === true || active === "true" || active === 1,
+      });
+    }
+  }
+  return hosts;
+}
+
+function extractWifiBands(d: GenieDevice): {
+  ssid2g: string | null;
+  ssid5g: string | null;
+  wifiEnabled2g: boolean | null;
+  wifiEnabled5g: boolean | null;
+} {
+  let ssid2g: string | null = null;
+  let ssid5g: string | null = null;
+  let wifiEnabled2g: boolean | null = null;
+  let wifiEnabled5g: boolean | null = null;
+  const lanDevices = deepGet(d, "InternetGatewayDevice", "LANDevice") as Record<string, unknown> | undefined;
+  if (!lanDevices) return { ssid2g, ssid5g, wifiEnabled2g, wifiEnabled5g };
+  for (const lan of Object.values(lanDevices)) {
+    const wlanCfg = deepGet(lan, "WLANConfiguration") as Record<string, unknown> | undefined;
+    if (!wlanCfg) continue;
+    for (const [idx, wv] of Object.entries(wlanCfg)) {
+      const ssid = deepGet(wv, "SSID", "_value");
+      const toBool = (x: unknown): boolean | null =>
+        x === true || x === "true" || x === 1 ? true : x === false || x === "false" || x === 0 ? false : null;
+      const en = toBool(deepGet(wv, "Enable", "_value"));
+      // On ZTE the physical radio (RadioEnabled) is the real on/off; WiFi is up for the client
+      // only when both the radio is powered and the BSS is enabled. Either explicitly off ⇒ off.
+      const radio = toBool(deepGet(wv, "RadioEnabled", "_value"));
+      const enabled = en === false || radio === false ? false : en === true || radio === true ? true : null;
+      const s = typeof ssid === "string" && !ssid.startsWith("SSID") ? ssid : null;
+      const n = Number.parseInt(idx, 10);
+      if (n === 1) {
+        ssid2g = s;
+        wifiEnabled2g = enabled;
+      } else if (n === 5) {
+        ssid5g = s;
+        wifiEnabled5g = enabled;
+      }
+    }
+  }
+  return { ssid2g, ssid5g, wifiEnabled2g, wifiEnabled5g };
+}
+
+function parseGenieDate(v: unknown): Date | null {
+  if (v instanceof Date) return v;
+  if (typeof v === "string" || typeof v === "number") {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+export function summarizeGenieDevice(d: GenieDevice): AcsDeviceSummary {
+  const uptime = deepGet(d, "InternetGatewayDevice", "DeviceInfo", "UpTime", "_value");
+  const wifi = extractWifiBands(d);
+  return {
+    deviceId: String(d._id ?? ""),
+    serial: extractSerial(d),
+    productClass: valStr("InternetGatewayDevice", "DeviceInfo", "ProductClass")(d),
+    modelName: valStr("InternetGatewayDevice", "DeviceInfo", "ModelName")(d),
+    hardwareVersion: valStr("InternetGatewayDevice", "DeviceInfo", "HardwareVersion")(d),
+    softwareVersion: valStr("InternetGatewayDevice", "DeviceInfo", "SoftwareVersion")(d),
+    wanIp: extractWanIp(d) ?? null,
+    wanMode: extractWanMode(d),
+    uptimeSec: typeof uptime === "number" ? uptime : typeof uptime === "string" ? Number(uptime) || null : null,
+    ...wifi,
+    lanHosts: extractLanHosts(d),
+    lastInform: parseGenieDate(d._lastInform),
+    lastBootstrap: parseGenieDate(d._lastBootstrap),
+  };
+}
+
+/** Paginated device list for the mirror worker (projection keeps payloads small). */
+export async function listGenieDevices(
+  genieacsUrl: string,
+  opts?: { skip?: number; limit?: number; serial?: string }
+): Promise<AcsDeviceSummary[]> {
+  const query = opts?.serial ? { _id: { $regex: opts.serial.toUpperCase() } } : undefined;
+  const qs = new URLSearchParams();
+  if (query) qs.set("query", JSON.stringify(query));
+  qs.set("projection", MIRROR_PROJECTION);
+  if (opts?.skip != null) qs.set("skip", String(opts.skip));
+  if (opts?.limit != null) qs.set("limit", String(opts.limit));
+  const res = await fetch(`${genieacsUrl.replace(/\/$/, "")}/devices?${qs}`);
+  if (!res.ok) throw new Error(`GenieACS list failed: ${res.status}`);
+  const devices = (await res.json()) as GenieDevice[];
+  return devices.map(summarizeGenieDevice).filter((d) => d.deviceId);
+}
+
+/** Count devices in GenieACS (HEAD or empty projection count via full list size — GenieACS has no count endpoint; use devices?projection=_id). */
+export async function countGenieDevices(genieacsUrl: string): Promise<number> {
+  const res = await fetch(
+    devicesUrl(genieacsUrl.replace(/\/$/, ""), { projection: "_id" })
+  );
+  if (!res.ok) throw new Error(`GenieACS count failed: ${res.status}`);
+  const devices = (await res.json()) as unknown[];
+  return devices.length;
+}
+
 export async function updateWifi(
   genieacsUrl: string,
   params: WifiUpdateParams
@@ -240,6 +521,16 @@ export async function updateWifi(
   const params2g: ParamValue[] = [];
   const params5g: ParamValue[] = [];
 
+  if (params.enable2g !== undefined) {
+    // ZTE (F673AV9 & family): the "WLAN On/Off" master is the physical radio (RadioEnabled);
+    // Enable alone only toggles the BSS/SSID and leaves the radio off — the client sees no
+    // change. Set both so the radio powers on and the SSID broadcasts.
+    const v = params.enable2g ? "true" : "false";
+    params2g.push(
+      ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.RadioEnabled", v, "xsd:boolean"],
+      ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable", v, "xsd:boolean"]
+    );
+  }
   if (params.ssid2g) {
     params2g.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", params.ssid2g, "xsd:string"]);
   }
@@ -249,6 +540,14 @@ export async function updateWifi(
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.IEEE11iEncryptionModes", "AESEncryption", "xsd:string"],
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.IEEE11iAuthenticationMode", "PSKAuthentication", "xsd:string"],
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", params.pass2g, "xsd:string"]
+    );
+  }
+  if (params.enable5g !== undefined) {
+    // See enable2g note — RadioEnabled is the actual on/off on ZTE; set both.
+    const v = params.enable5g ? "true" : "false";
+    params5g.push(
+      ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.RadioEnabled", v, "xsd:boolean"],
+      ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Enable", v, "xsd:boolean"]
     );
   }
   if (params.ssid5g) {

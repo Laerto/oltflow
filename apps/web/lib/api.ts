@@ -61,14 +61,24 @@ export const api = {
       warningSignal: number;
       expiring: { id: number; name: string | null; ponPort: string; expiration: string | null; pppoeUser: string | null }[];
     }>(`/api/olts/${oltId}/stats`),
-  onus: (oltId: number) => request<{ onus: OnuRow[]; total: number }>(`/api/olts/${oltId}/onus`),
-  allOnus: () => request<{ onus: OnuRow[]; total: number }>(`/api/onus`),
+  onus: (oltId: number, params?: OnuListParams) =>
+    request<OnuListResponse>(`/api/olts/${oltId}/onus${onuListQuery(params)}`),
+  allOnus: (params?: OnuListParams) => request<OnuListResponse>(`/api/onus${onuListQuery(params)}`),
   ponTraffic: (oltId: number) =>
     request<{
       available: boolean;
       ports: { ponPort: string; downBps: number; upBps: number }[];
       series: { t: number; downBps: number; upBps: number }[];
     }>(`/api/olts/${oltId}/pon-traffic`),
+  oltHealth: (oltId: number) =>
+    request<{
+      available: boolean;
+      cards: { slot: number; card: string; cpu: number; temp: number }[];
+      series: { t: number; cpu: number; temp: number }[];
+      maxCpu?: number;
+      maxTemp?: number;
+      avgCpu?: number;
+    }>(`/api/olts/${oltId}/health`),
   onu: (onuId: number) => request<OnuRow & { oltId: number; oltName: string }>(`/api/onus/${onuId}`),
   unconfigured: (oltId: number) => request<{ onus: UncfgOnu[]; total: number }>(`/api/olts/${oltId}/unconfigured`),
   scanUnconfigured: (oltId: number) => request<{ jobId: string }>(`/api/olts/${oltId}/scan-unconfigured`, { method: "POST" }),
@@ -107,7 +117,12 @@ export const api = {
   listUsers: () => request<{ users: UserRow[] }>("/api/users"),
   createUser: (input: { email: string; name?: string; password: string; role: string; oltIds?: number[]; telegramChatId?: string }) =>
     request<{ user: UserRow }>("/api/users", { method: "POST", body: JSON.stringify(input) }),
-  updateUser: (id: number, input: { name?: string; role?: string; password?: string; oltIds?: number[]; telegramChatId?: string }) =>
+  inviteUser: (input: { email: string; name?: string }) =>
+    request<{ ok: boolean; inviteUrl?: string; warning?: string }>("/api/admin/invite", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateUser: (id: number, input: { name?: string; role?: string; password?: string; oltIds?: number[]; telegramChatId?: string; status?: string }) =>
     request<{ user: UserRow }>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   listTechnicians: () => request<{ technicians: { id: number; name: string | null; email: string }[] }>("/api/technicians"),
   mapData: () => request<{ olts: MapOlt[]; onus: MapOnu[]; splitters: MapSplitter[]; fiber: MapFiber[] }>("/api/map"),
@@ -134,20 +149,311 @@ export const api = {
   ping: (ip: string) =>
     request<{ alive: boolean; avgMs: number | null; loss: number }>(`/api/ping?ip=${encodeURIComponent(ip)}`),
   alarms: () => request<AlarmsResponse>("/api/alarms"),
+
+  // ── Admin console (Phase 2) ──
+  adminOverview: () => request<AdminOverview>("/api/admin/overview"),
+  adminPermissions: () =>
+    request<{
+      catalogue: { id: string; label: string; description?: string | null; group: string }[];
+      groups: { id: string; label: string }[];
+      roleDefaults: Record<string, string[]>;
+      roleMatrix: Record<string, Record<string, boolean>>;
+      users: { id: number; email: string; name: string | null; role: string; overrides: { perm: string; allow: boolean }[] }[];
+    }>("/api/admin/permissions"),
+  adminSetPermission: (input: { userId: number; perm: string; allow: boolean | null }) =>
+    request<{ ok: boolean }>("/api/admin/permissions", { method: "PUT", body: JSON.stringify(input) }),
+  adminAudit: (params?: {
+    q?: string;
+    action?: string;
+    result?: string;
+    oltId?: number;
+    limit?: number;
+    cursor?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.q) sp.set("q", params.q);
+    if (params?.action) sp.set("action", params.action);
+    if (params?.result) sp.set("result", params.result);
+    if (params?.oltId != null) sp.set("oltId", String(params.oltId));
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    if (params?.cursor) sp.set("cursor", params.cursor);
+    const q = sp.toString();
+    return request<{ logs: AdminAuditRow[]; nextCursor: string | null }>(
+      `/api/admin/audit${q ? `?${q}` : ""}`
+    );
+  },
+  adminJobs: (params?: { status?: string; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.status) sp.set("status", params.status);
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    const q = sp.toString();
+    return request<{
+      jobs: AdminJobRow[];
+      byStatus: Record<string, number>;
+      queue: { waiting: number; active: number; delayed: number; failed: number };
+    }>(`/api/admin/jobs${q ? `?${q}` : ""}`);
+  },
+  adminJobAction: (id: string, action: "retry" | "discard") =>
+    request<{ ok: boolean }>(`/api/admin/jobs/${id}`, { method: "POST", body: JSON.stringify({ action }) }),
+  adminSettings: () =>
+    request<{
+      settings: { key: string; label: string; group: string; type: "number" | "string" | "boolean"; value: unknown; updatedAt: string | null }[];
+    }>("/api/admin/settings"),
+  adminSetSetting: (key: string, value: unknown) =>
+    request<{ ok: boolean }>("/api/admin/settings", { method: "PUT", body: JSON.stringify({ key, value }) }),
+  adminSessions: () =>
+    request<{
+      sessions: {
+        id: string;
+        userId: number;
+        email: string;
+        name: string | null;
+        role: string;
+        ip: string | null;
+        userAgent: string | null;
+        createdAt: string;
+        lastSeenAt: string;
+        expiresAt: string;
+        revoked: boolean;
+      }[];
+    }>("/api/admin/sessions"),
+  adminRevokeSession: (sessionId: string) =>
+    request<{ ok: boolean }>("/api/admin/sessions", { method: "DELETE", body: JSON.stringify({ sessionId }) }),
+  adminRevokeUserSessions: (userId: number) =>
+    request<{ ok: boolean }>("/api/admin/sessions", { method: "DELETE", body: JSON.stringify({ userId, all: true }) }),
+  adminLogs: (params?: { level?: string; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.level) sp.set("level", params.level);
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    const q = sp.toString();
+    return request<{ logs: Record<string, unknown>[]; total: number }>(`/api/admin/logs${q ? `?${q}` : ""}`);
+  },
+
+  // ── Phase 3: Integrations + notifications ──
+  adminIntegrations: () =>
+    request<{
+      integrations: {
+        id: string;
+        label: string;
+        description: string;
+        group: string;
+        enabled: boolean;
+        status: string | null;
+        statusDetail: string | null;
+        fromEnvFallback: boolean;
+      }[];
+    }>("/api/admin/integrations"),
+  adminIntegration: (id: string) =>
+    request<{
+      id: string;
+      enabled: boolean;
+      config: Record<string, unknown>;
+      status: string | null;
+      statusDetail: string | null;
+    }>(`/api/admin/integrations/${id}`),
+  adminSaveIntegration: (id: string, input: { enabled: boolean; config: Record<string, unknown> }) =>
+    request<{ ok: boolean }>(`/api/admin/integrations/${id}`, { method: "PUT", body: JSON.stringify(input) }),
+  adminTestIntegration: (id: string, opts?: { sendTest?: boolean; to?: string }) =>
+    request<{ ok: boolean; detail: string }>(`/api/admin/integrations/${id}`, {
+      method: "POST",
+      body: JSON.stringify(opts ?? {}),
+    }),
+  waStatus: () =>
+    request<{ status: string; number: string | null; error: string | null; qr: string | null }>(
+      "/api/admin/integrations/whatsapp"
+    ),
+  waControl: (action: "link" | "unlink") =>
+    request<{ ok: boolean; workerListening: boolean }>("/api/admin/integrations/whatsapp", {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
+  telegramChats: () =>
+    request<{ chats: { id: string; title: string; type: string }[]; detail?: string }>(
+      "/api/admin/integrations/telegram/chats"
+    ),
+  adminNotifyRules: () =>
+    request<{
+      rules: Record<string, unknown>[];
+      meta: { eventTypes: string[]; channels: string[]; behaviors: string[] };
+    }>("/api/admin/notifications/rules"),
+  adminCreateNotifyRule: (input: Record<string, unknown>) =>
+    request<{ rule: unknown }>("/api/admin/notifications/rules", { method: "POST", body: JSON.stringify(input) }),
+  adminUpdateNotifyRule: (id: number, input: Record<string, unknown>) =>
+    request<{ rule: unknown }>(`/api/admin/notifications/rules/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  adminDeleteNotifyRule: (id: number) =>
+    request<{ ok: boolean }>(`/api/admin/notifications/rules/${id}`, { method: "DELETE" }),
+  adminNotifyLogs: (params?: { status?: string; channel?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.status) sp.set("status", params.status);
+    if (params?.channel) sp.set("channel", params.channel);
+    const q = sp.toString();
+    return request<{ logs: { id: string; eventType: string; channel: string; status: string; error: string | null; target: string | null; alarmKey: string | null; createdAt: string }[] }>(
+      `/api/admin/notifications/logs${q ? `?${q}` : ""}`
+    );
+  },
+  adminMaintenance: () =>
+    request<{
+      windows: {
+        id: number;
+        name: string;
+        oltId: number | null;
+        oltName: string | null;
+        startsAt: string;
+        endsAt: string;
+        reason: string | null;
+        active: boolean;
+      }[];
+    }>("/api/admin/maintenance"),
+  adminCreateMaintenance: (input: { name: string; startsAt: string; endsAt: string; reason?: string; oltId?: number }) =>
+    request<{ window: unknown }>("/api/admin/maintenance", { method: "POST", body: JSON.stringify(input) }),
+  adminDeleteMaintenance: (id: number) =>
+    request<{ ok: boolean }>("/api/admin/maintenance", { method: "DELETE", body: JSON.stringify({ id }) }),
+  alarmAction: (key: string, action: "ack" | "unack" | "silence", minutes?: number) =>
+    request<{ ok: boolean }>(`/api/alarms/${encodeURIComponent(key)}`, {
+      method: "POST",
+      body: JSON.stringify({ action, minutes }),
+    }),
+
+  // ── Phase 5: Backup ──
+  adminBackupTargets: () => request<{ targets: Record<string, unknown>[] }>("/api/admin/backup/targets"),
+  adminCreateBackupTarget: (input: {
+    kind: string;
+    name: string;
+    config: Record<string, unknown>;
+    schedule?: string | null;
+    retention?: { keepLast?: number };
+    enabled?: boolean;
+  }) => request<{ target: { id: number } }>("/api/admin/backup/targets", { method: "POST", body: JSON.stringify(input) }),
+  adminDeleteBackupTarget: (id: number) =>
+    request<{ ok: boolean }>(`/api/admin/backup/targets/${id}`, { method: "DELETE" }),
+  adminBackupRuns: () => request<{ runs: Record<string, unknown>[] }>("/api/admin/backup/runs"),
+  adminStartBackup: (targetId?: number) =>
+    request<{ runId: number; jobId: string }>("/api/admin/backup/runs", {
+      method: "POST",
+      body: JSON.stringify({ targetId }),
+    }),
+  adminBackupRun: (id: number) =>
+    request<{ run: Record<string, unknown>; restoreCommand: string }>(`/api/admin/backup/runs/${id}`),
+  adminVerifyBackup: (id: number) =>
+    request<{ ok: boolean; jobId: string }>(`/api/admin/backup/runs/${id}`, {
+      method: "POST",
+      body: JSON.stringify({ action: "verify" }),
+    }),
+
+  // ── Phase 6: GenieACS CPE ──
+  onuAcs: (onuId: number) =>
+    request<{ acs: import("@/components/onu-cpe-panel").AcsMirror | null }>(`/api/onus/${onuId}/acs`),
+  onuAcsRefresh: (onuId: number) =>
+    request<{ jobId: string }>(`/api/onus/${onuId}/acs`, { method: "POST" }),
+  onuAcsFactoryReset: (onuId: number, deviceId: string) =>
+    request<{ jobId: string }>(`/api/onus/${onuId}/acs/factory-reset`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId }),
+    }),
+  cpeList: (params?: {
+    q?: string;
+    neverInformed?: boolean;
+    firmware?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.q) sp.set("q", params.q);
+    if (params?.neverInformed) sp.set("neverInformed", "1");
+    if (params?.firmware) sp.set("firmware", params.firmware);
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    if (params?.offset) sp.set("offset", String(params.offset));
+    const q = sp.toString();
+    return request<{ total: number; nextOffset: number | null; devices: Record<string, unknown>[] }>(
+      `/api/cpe${q ? `?${q}` : ""}`
+    );
+  },
+  cpeStats: () =>
+    request<{
+      total: number;
+      neverInformed: number;
+      pendingProvision: number;
+      firmware: { version: string; count: number }[];
+    }>("/api/cpe/stats"),
 };
+
+export interface AdminOverview {
+  health: { db: boolean; redis: boolean; worker: boolean; workerLastBeat: string | null };
+  counts: {
+    olts: number;
+    onus: number;
+    users: number;
+    openAlarms: number;
+    openTickets: number;
+    activeSessions: number;
+    failedJobs24h: number;
+  };
+  queue: { waiting: number; active: number; delayed: number; failed: number };
+  syncLagSec: number | null;
+  olts: { id: number; name: string; status: string; lastSync: string | null; lagSec: number | null }[];
+  recentJobs: { id: string; type: string; status: string; error: string | null; createdAt: string; oltId: number | null }[];
+}
+export interface AdminAuditRow {
+  id: string;
+  action: string;
+  result: string | null;
+  oltName: string | null;
+  ponPort: string | null;
+  userEmail: string | null;
+  userName: string | null;
+  payload: unknown;
+  createdAt: string;
+}
+export interface AdminJobRow {
+  id: string;
+  type: string;
+  status: string;
+  oltName: string | null;
+  ponPort: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type AlarmSeverity = "critical" | "warning";
 export interface AlarmItem {
   id: string;
   severity: AlarmSeverity;
-  kind: "olt_offline" | "port_outage" | "onu_signal";
+  kind: "olt_offline" | "port_outage" | "onu_signal" | "onu_offline" | "onu_expiry";
   title: string;
   detail: string;
   href?: string;
+  acked?: boolean;
 }
 export interface AlarmsResponse {
   items: AlarmItem[];
   counts: { critical: number; warning: number };
+}
+
+export interface OnuListParams {
+  q?: string;
+  status?: "all" | "online" | "offline";
+  signal?: "all" | "good" | "warning" | "critical";
+  cursor?: number | null;
+  limit?: number;
+}
+export interface OnuListResponse {
+  onus: OnuRow[];
+  total: number;
+  nextCursor: number | null;
+  limit: number;
+}
+
+function onuListQuery(params?: OnuListParams): string {
+  if (!params) return "";
+  const sp = new URLSearchParams();
+  if (params.q) sp.set("q", params.q);
+  if (params.status && params.status !== "all") sp.set("status", params.status);
+  if (params.signal && params.signal !== "all") sp.set("signal", params.signal);
+  if (params.cursor != null) sp.set("cursor", String(params.cursor));
+  if (params.limit != null) sp.set("limit", String(params.limit));
+  const s = sp.toString();
+  return s ? `?${s}` : "";
 }
 
 export interface Me {
@@ -161,6 +467,8 @@ export interface UserRow {
   email: string;
   name: string | null;
   role: string;
+  status?: string;
+  emailVerifiedAt?: string | null;
   createdAt: string;
   telegramChatId: string | null;
   olts: { id: number; name: string }[];

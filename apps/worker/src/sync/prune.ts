@@ -1,20 +1,23 @@
-import { prisma } from "@oltflow/db";
+import { prisma, getNumberSetting, SETTING_KEYS } from "@oltflow/db";
 
-// Retention windows (env-overridable). Signals feed the history graph; jobs/audit are logs.
-// PonTraffic prunes itself in pon-traffic.ts (24h). Everything else is bounded here so the
-// DB stays healthy as the ONU count grows across more OLTs.
+// Retention windows (DB settings with env bootstrap). Signals feed the history graph;
+// jobs/audit are logs. PonTraffic prunes itself in pon-traffic.ts (24h).
 const DAY = 24 * 60 * 60 * 1000;
-const SIGNAL_RETAIN_DAYS = Number(process.env.SIGNAL_RETAIN_DAYS ?? 30);
-const JOB_RETAIN_DAYS = Number(process.env.JOB_RETAIN_DAYS ?? 7);
-const AUDIT_RETAIN_DAYS = Number(process.env.AUDIT_RETAIN_DAYS ?? 180);
 
 export async function pruneOldData(): Promise<{ signals: number; jobs: number; audit: number }> {
+  const [signalDays, jobDays, auditDays] = await Promise.all([
+    getNumberSetting(SETTING_KEYS.retainSignalDays),
+    getNumberSetting(SETTING_KEYS.retainJobDays),
+    getNumberSetting(SETTING_KEYS.retainAuditDays),
+  ]);
   const now = Date.now();
   const [signals, jobs, audit] = await Promise.all([
-    prisma.signal.deleteMany({ where: { recordedAt: { lt: new Date(now - SIGNAL_RETAIN_DAYS * DAY) } } }),
+    prisma.signal.deleteMany({ where: { recordedAt: { lt: new Date(now - signalDays * DAY) } } }),
     // Only finished jobs — never delete queued/active work.
-    prisma.job.deleteMany({ where: { status: { in: ["done", "failed"] }, createdAt: { lt: new Date(now - JOB_RETAIN_DAYS * DAY) } } }),
-    prisma.auditLog.deleteMany({ where: { createdAt: { lt: new Date(now - AUDIT_RETAIN_DAYS * DAY) } } }),
+    prisma.job.deleteMany({
+      where: { status: { in: ["done", "failed"] }, createdAt: { lt: new Date(now - jobDays * DAY) } },
+    }),
+    prisma.auditLog.deleteMany({ where: { createdAt: { lt: new Date(now - auditDays * DAY) } } }),
   ]);
   return { signals: signals.count, jobs: jobs.count, audit: audit.count };
 }

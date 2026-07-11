@@ -1,9 +1,9 @@
 "use client";
 
 import { Suspense, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Server } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthShell } from "@/components/auth-shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -37,10 +37,8 @@ function LoginForm() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Gabim");
-      // Only follow same-app paths — a full URL or protocol-relative "//host" in ?next
-      // would let a crafted login link bounce the user to an external site.
-      const next = searchParams.get("next") ?? "/";
-      router.push(next.startsWith("/") && !next.startsWith("//") ? next : "/");
+      const next = searchParams.get("next") ?? "/dashboard";
+      router.push(next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
       router.refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -50,55 +48,60 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm border-border/50 bg-card/95 p-0 shadow-2xl shadow-primary/10 backdrop-blur">
-        <CardHeader className="pb-2 pt-6 text-center">
-          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground mb-2">
-            <Server className="h-6 w-6" />
-          </div>
-          <CardTitle className="text-xl font-extrabold tracking-tight">
-            <span className="text-primary">OLT</span>Flow
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">Hyrje në sistem</p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-xs font-semibold uppercase text-muted-foreground">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@oltflow.local"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-xs font-semibold uppercase text-muted-foreground">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
-
-            {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Duke hyrë..." : "Hyr"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <AuthShell
+      title="Hyrje në panel"
+      subtitle="NOC · OLT / ONU management"
+      footer={
+        <>
+          Nuk ke llogari?{" "}
+          <Link href="/signup" className="font-medium text-blue-400 hover:underline">
+            Regjistrohu
+          </Link>
+          {" · "}
+          <Link href="/forgot" className="font-medium text-blue-400 hover:underline">
+            Harruat fjalëkalimin?
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-xs text-slate-400">
+            Email
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="ju@kompania.al"
+            className="border-slate-700 bg-slate-950 text-slate-100"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className="text-xs text-slate-400">
+            Fjalëkalimi
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            className="border-slate-700 bg-slate-950 text-slate-100"
+          />
+        </div>
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500">
+          {loading ? "Duke hyrë..." : "Hyr"}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

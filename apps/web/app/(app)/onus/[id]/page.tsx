@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   Activity,
   CalendarDays,
@@ -13,7 +14,7 @@ import {
   Pencil,
   Power,
   RefreshCw,
-  Satellite,
+  Router,
   Trash2,
   Wifi,
   Wrench,
@@ -27,15 +28,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { PppoeModal } from "@/components/pppoe-modal";
-import { WifiModal } from "@/components/wifi-modal";
 import { ReplaceOnuModal } from "@/components/replace-onu-modal";
 import { DeleteOnuDialog } from "@/components/delete-onu-dialog";
 import { PingButton } from "@/components/ping-button";
-import { OnuLivePanel } from "@/components/onu-live-panel";
 import { TicketModal } from "@/components/ticket-modal";
+import { OnuCpePanel } from "@/components/onu-cpe-panel";
 import { useMe } from "@/app/(app)/providers";
 import { can } from "@/lib/permissions";
 import { isEponPort, onuConnectionKind, classifySignal } from "@oltflow/core";
+
+// The live traffic panel pulls in recharts — load it only when this page mounts,
+// as its own chunk, so the ONU detail shell paints without it.
+const OnuLivePanel = dynamic(
+  () => import("@/components/onu-live-panel").then((m) => m.OnuLivePanel),
+  { ssr: false }
+);
 
 type OnuDetail = OnuRow & { oltId: number; oltName: string };
 
@@ -58,7 +65,6 @@ export default function OnuDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pppoeOpen, setPppoeOpen] = useState(false);
-  const [wifiOpen, setWifiOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [rebooting, setRebooting] = useState(false);
@@ -319,6 +325,13 @@ export default function OnuDetailPage() {
         </div>
       </div>
 
+      {/* ACS / TR-069 panel — direkt poshtë ONU Information; menaxhon SSID/pass/on-off të CPE-së. */}
+      <SectionCard title={<><Router className="inline h-4 w-4" /> CPE / ACS (TR-069)</>} className="mt-4">
+        <div className="p-4">
+          <OnuCpePanel onuId={onu.id} canOperate={operate} />
+        </div>
+      </SectionCard>
+
       {!epon && (
         <OnuLivePanel
           onuId={onu.id}
@@ -363,25 +376,6 @@ export default function OnuDetailPage() {
         </SectionCard>
       )}
 
-      <SectionCard
-        title={<><Wifi className="inline h-4 w-4" /> WiFi (TR-069)</>}
-        className="mt-4"
-        action={wifi ? <Button variant="default" className="px-2 py-1 text-[11px]" onClick={() => setWifiOpen(true)}><Pencil className="h-3 w-3" /> Modifiko WiFi</Button> : undefined}
-      >
-        <div className="p-4">
-          {!onu.serial ? (
-            <div className="text-xs text-muted-foreground">Nuk ka TR-069</div>
-          ) : !wifi ? (
-            <div className="text-xs text-muted-foreground">WiFi nuk disponohet</div>
-          ) : (
-            <div className="flex gap-3">
-              <WifiBand label="2.4 GHz" band={wifi.wlan2g} />
-              <WifiBand label="5 GHz" band={wifi.wlan5g} />
-            </div>
-          )}
-        </div>
-      </SectionCard>
-
       <PppoeModal open={pppoeOpen} onClose={() => setPppoeOpen(false)} oltId={onu.oltId} ponPort={onu.ponPort} onDone={load} />
       <ReplaceOnuModal
         open={replaceOpen}
@@ -392,17 +386,6 @@ export default function OnuDetailPage() {
         currentType={onu.type}
         onDone={load}
       />
-      {wifi && (
-        <WifiModal
-          open={wifiOpen}
-          onClose={() => setWifiOpen(false)}
-          onuId={onu.id}
-          deviceId={wifi.deviceId}
-          initialSsid2g={wifi.wlan2g?.ssid}
-          initialSsid5g={wifi.wlan5g?.ssid}
-          onDone={load}
-        />
-      )}
       {deleteOpen && (
         <DeleteOnuDialog
           open
@@ -473,25 +456,6 @@ function SigBox({ label, value, color }: { label: string; value: number | null; 
   );
 }
 
-function WifiBand({ label, band }: { label: string; band?: { ssid: string; password: string; enabled: boolean } }) {
-  return (
-    <div className="flex-1 rounded-lg border border-border p-3">
-      <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"><Satellite className="inline h-3 w-3" /> {label}</div>
-      <InfoRowSm label="SSID" value={<strong>{band?.ssid || "N/A"}</strong>} />
-      <InfoRowSm label="Password" value={band?.password ? <span className="font-mono">{band.password}</span> : "N/A"} />
-      <InfoRowSm label="Status" value={<Badge variant={band?.enabled ? "default" : "destructive"}>{band?.enabled ? "Aktiv" : "Off"}</Badge>} />
-    </div>
-  );
-}
-
-function InfoRowSm({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-center py-1 text-xs">
-      <span className="w-20 flex-shrink-0 text-muted-foreground">{label}</span>
-      <span>{value}</span>
-    </div>
-  );
-}
 
 function signalColor(rx: number | null): string {
   const b = classifySignal(rx);

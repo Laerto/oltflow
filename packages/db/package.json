@@ -17,6 +17,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@oltflow/core": "*",
     "@prisma/client": "^6.5.0"
   },
   "devDependencies": {

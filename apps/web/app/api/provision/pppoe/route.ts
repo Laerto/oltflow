@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { pppoeSchema, JOB_NAMES } from "@oltflow/core";
+import { pppoeSchema, JOB_NAMES, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
-import { guardOltAccess } from "@/lib/olt-access";
+import { guardOltAccess, guardTier } from "@/lib/olt-access";
 import { enqueueJob } from "@/lib/queue";
 
 export async function POST(request: Request) {
   await requireUser();
+  const tierDenied = await guardTier(TIER.OPERATE);
+  if (tierDenied) return tierDenied;
   const body = await request.json().catch(() => null);
   const parsed = pppoeSchema.safeParse(body);
   if (!parsed.success) {

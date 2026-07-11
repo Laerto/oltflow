@@ -18,6 +18,13 @@ import { kv } from "../kv.js";
 // How many working ONUs a single signal batch scans before yielding to a waiting operator.
 const SIGNAL_BATCH = 40;
 
+// Flap damping: a single failed sync tick (a transient telnet timeout / momentary blip) must NOT
+// flip an OLT to "offline" — that fired false `olt.unreachable` critical alarms that self-cleared
+// 2 min later. Only declare offline after this many CONSECUTIVE failures (~N minutes at the sync
+// interval); any success resets the counter. Real outages still trip within a few minutes.
+const OFFLINE_FAIL_THRESHOLD = Number(process.env.OLT_OFFLINE_FAILS ?? 3);
+const failKey = (oltId: number) => `sync:fail:${oltId}`;
+
 /** Map an inventory row to a batchUpsertOnus entry (shared by the per-slot GPON and EPON passes). */
 function toDetailUpsert(row: InventoryRow) {
   return {
@@ -157,13 +164,20 @@ export async function syncOlt(oltId: number): Promise<number> {
       { maxWaitMs: 8000, interactive: false }
     );
 
+    await kv.del(failKey(olt.id)).catch(() => {});
     await prisma.olt.update({ where: { id: olt.id }, data: { status: "online", lastSync: new Date() } });
     return count;
   } catch (err) {
     // Busy with a user action → skip; the deduped scheduler tick retries next cycle. Don't
-    // mark offline (the OLT is reachable, just locked).
+    // count it as a failure (the OLT is reachable, just locked).
     if (err instanceof OltBusyError) return 0;
-    await prisma.olt.update({ where: { id: olt.id }, data: { status: "offline" } });
+    // Flap damping: only mark offline after OFFLINE_FAIL_THRESHOLD consecutive failed ticks, so a
+    // single transient blip doesn't fire a false olt.unreachable alarm.
+    const fails = await kv.incr(failKey(olt.id)).catch(() => OFFLINE_FAIL_THRESHOLD);
+    await kv.expire(failKey(olt.id), 3600).catch(() => {});
+    if (fails >= OFFLINE_FAIL_THRESHOLD) {
+      await prisma.olt.update({ where: { id: olt.id }, data: { status: "offline" } });
+    }
     throw err;
   }
 }

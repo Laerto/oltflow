@@ -64,8 +64,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Kredencialet janë të gabuara" }, { status: 401 });
   }
 
+  // Account lifecycle (Phase 4)
+  if (user.status === "disabled") {
+    await auditLogin("error", email, ip, user.id);
+    return NextResponse.json({ error: "Llogaria është çaktivizuar" }, { status: 403 });
+  }
+  if (user.status === "pending") {
+    await auditLogin("error", email, ip, user.id);
+    return NextResponse.json(
+      {
+        error: user.emailVerifiedAt
+          ? "Llogaria pret miratimin e administratorit"
+          : "Konfirmo emailin fillimisht, pastaj prit miratimin e adminit",
+      },
+      { status: 403 }
+    );
+  }
+  if (!user.emailVerifiedAt) {
+    // Legacy edge case: active without verification (shouldn't happen after migration)
+    // Allow admin-created accounts that skipped verify — migration sets emailVerifiedAt.
+  }
+
   await redis.del(emailKey).catch(() => {});
-  await createSessionCookie({ sub: String(user.id), email: user.email, name: user.name, role: user.role });
+  await createSessionCookie(
+    { sub: String(user.id), email: user.email, name: user.name, role: user.role },
+    { ip, userAgent: request.headers.get("user-agent") }
+  );
   await auditLogin("success", email, ip, user.id);
   return NextResponse.json({ ok: true });
 }

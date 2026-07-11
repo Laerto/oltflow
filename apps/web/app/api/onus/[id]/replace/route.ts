@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
-import { replaceOnuSchema, JOB_NAMES } from "@oltflow/core";
+import { replaceOnuSchema, JOB_NAMES, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
-import { guardOnuAccess } from "@/lib/olt-access";
+import { guardOnuAccess, guardTier } from "@/lib/olt-access";
 import { enqueueJob } from "@/lib/queue";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
+  const tierDenied = await guardTier(TIER.ADMIN);
+  if (tierDenied) return tierDenied;
   const { id } = await params;
   const denied = await guardOnuAccess(Number(id));
   if (denied) return denied;

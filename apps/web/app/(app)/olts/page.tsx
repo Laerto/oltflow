@@ -105,7 +105,7 @@ export default function OltsPage() {
                           className="h-7 px-2 text-[11px]"
                           onClick={() => {
                             setCurrentOltId(o.id);
-                            router.push("/");
+                            router.push("/dashboard");
                           }}
                         >
                           <LayoutDashboard className="mr-1 h-3.5 w-3.5" />

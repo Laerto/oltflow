@@ -3,6 +3,7 @@ import { prisma, Prisma } from "@oltflow/db";
 import { SIGNAL_THRESHOLDS } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
 import { guardOltAccess } from "@/lib/olt-access";
+import { cachedJson } from "@/lib/redis";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireUser();
@@ -11,6 +12,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const denied = await guardOltAccess(oltId);
   if (denied) return denied;
 
+  // Rollup is identical for every viewer of this OLT; cache 10s so N operators
+  // polling the dashboard don't each re-run the 3 aggregate queries. Auth/scope
+  // above stays per-request — only the computed numbers are shared.
+  const payload = await cachedJson(`stats:olt:${oltId}`, 10, () => computeStats(oltId));
+  return NextResponse.json(payload);
+}
+
+async function computeStats(oltId: number) {
   const now = Date.now();
   const in7Days = new Date(now + 7 * 24 * 60 * 60 * 1000);
   // Only clients worth chasing: expiring within 7 days OR expired at most 14 days ago.
@@ -22,22 +31,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // offline-reason split shown on the dashboard cards. State strings come straight
     // from the OLT and vary in case (e.g. "OffLine" vs "Offline"), so compare lower-cased.
     prisma.onu.groupBy({ by: ["state"], where: { oltId }, _count: { _all: true } }),
-    // Low-signal counts from each working ONU's LATEST sample (not a fixed time window):
-    // on large OLTs the signal sweep can lag >10min, which used to make the dashboard show
-    // 0 low signals while the ONU list (which reads the latest sample) showed plenty. Bands
-    // use the single-source thresholds from @oltflow/core, matching classifySignal.
+    // Low-signal counts from denormalized lastOnuRx (updated with every Signal insert).
+    // Indexed columns — no DISTINCT ON over Signal history. Thresholds match classifySignal.
     prisma.$queryRaw<{ warning: bigint; critical: bigint }[]>(Prisma.sql`
-      WITH latest AS (
-        SELECT DISTINCT ON (s."onuId") s."onuRx" AS rx
-        FROM "Signal" s
-        JOIN "Onu" o ON o.id = s."onuId"
-        WHERE o."oltId" = ${oltId} AND o.state = 'working' AND s."onuRx" IS NOT NULL
-        ORDER BY s."onuId", s."recordedAt" DESC
-      )
       SELECT
-        count(*) FILTER (WHERE rx < ${SIGNAL_THRESHOLDS.warning}) AS critical,
-        count(*) FILTER (WHERE rx >= ${SIGNAL_THRESHOLDS.warning} AND rx < ${SIGNAL_THRESHOLDS.good}) AS warning
-      FROM latest
+        count(*) FILTER (WHERE "lastOnuRx" < ${SIGNAL_THRESHOLDS.warning}) AS critical,
+        count(*) FILTER (
+          WHERE "lastOnuRx" >= ${SIGNAL_THRESHOLDS.warning}
+            AND "lastOnuRx" < ${SIGNAL_THRESHOLDS.good}
+        ) AS warning
+      FROM "Onu"
+      WHERE "oltId" = ${oltId}
+        AND state = 'working'
+        AND "lastOnuRx" IS NOT NULL
     `),
     // Clients whose RADIUS subscription has expired or expires within 7 days — the
     // office works this list daily to call people in to pay. Soonest (most overdue) first.
@@ -65,7 +71,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
   const offline = total - online;
 
-  return NextResponse.json({
+  return {
     total,
     online,
     offline,
@@ -81,5 +87,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       expiration: o.expiration?.toISOString() ?? null,
       pppoeUser: o.pppoeUser,
     })),
-  });
+  };
 }

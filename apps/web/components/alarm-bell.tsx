@@ -10,6 +10,8 @@ const KIND_LABEL: Record<AlarmItem["kind"], string> = {
   olt_offline: "OLT",
   port_outage: "PORT",
   onu_signal: "ONU",
+  onu_offline: "OFF",
+  onu_expiry: "SKAD",
 };
 
 /** Header alarm centre: polls /api/alarms and flashes when something needs attention — the
@@ -76,10 +78,31 @@ export function AlarmBell() {
           <div className="max-h-[360px] overflow-y-auto py-1">
             {items.map((a) => {
               const dot = a.severity === "critical" ? "bg-rose-500" : "bg-amber-500";
+              async function ack(e: React.MouseEvent) {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                  await api.alarmAction(a.id, "ack");
+                  setItems((prev) => prev.map((x) => (x.id === a.id ? { ...x, acked: true } : x)));
+                } catch {
+                  /* ignore */
+                }
+              }
+              async function silence(e: React.MouseEvent) {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                  await api.alarmAction(a.id, "silence", 60);
+                  setItems((prev) => prev.filter((x) => x.id !== a.id));
+                  setCritical((c) => Math.max(0, c - (a.severity === "critical" ? 1 : 0)));
+                } catch {
+                  /* ignore */
+                }
+              }
               const body = (
-                <div className="flex items-start gap-2.5 px-3 py-2 hover:bg-muted/60">
+                <div className={`flex items-start gap-2.5 px-3 py-2 hover:bg-muted/60 ${a.acked ? "opacity-60" : ""}`}>
                   <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="rounded bg-muted px-1 text-[9px] font-semibold uppercase text-muted-foreground">
                         {KIND_LABEL[a.kind]}
@@ -87,16 +110,23 @@ export function AlarmBell() {
                       <span className="truncate text-xs font-medium text-foreground">{a.title}</span>
                     </div>
                     <div className="truncate text-[11px] text-muted-foreground">{a.detail}</div>
+                    <div className="mt-1 flex gap-2">
+                      <button type="button" onClick={ack} className="text-[10px] font-medium text-primary hover:underline">
+                        {a.acked ? "Acked" : "Ack"}
+                      </button>
+                      <button type="button" onClick={silence} className="text-[10px] font-medium text-muted-foreground hover:underline">
+                        Silence 1h
+                      </button>
+                      {a.href && (
+                        <Link href={a.href} className="text-[10px] font-medium text-muted-foreground hover:underline">
+                          Hap
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
-              return a.href ? (
-                <Link key={a.id} href={a.href} className="block">
-                  {body}
-                </Link>
-              ) : (
-                <div key={a.id}>{body}</div>
-              );
+              return <div key={a.id}>{body}</div>;
             })}
           </div>
         )}

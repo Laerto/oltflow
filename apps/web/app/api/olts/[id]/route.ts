@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
-import { updateOltSchema, encryptSecret } from "@oltflow/core";
+import { updateOltSchema, encryptSecret, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
+import { guardTier } from "@/lib/olt-access";
 
 const OLT_CRED_KEY = process.env.OLT_CRED_KEY ?? "";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
+  const tierDenied = await guardTier(TIER.ADMIN);
+  if (tierDenied) return tierDenied;
   const { id } = await params;
   const oltId = Number(id);
   const olt = await prisma.olt.findUnique({ where: { id: oltId } });
@@ -56,6 +59,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
+  const tierDenied = await guardTier(TIER.ADMIN);
+  if (tierDenied) return tierDenied;
   const { id } = await params;
   const oltId = Number(id);
   const olt = await prisma.olt.findUnique({ where: { id: oltId } });

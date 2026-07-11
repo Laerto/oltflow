@@ -33,6 +33,48 @@ async function q(p: mysql.Pool, sql: string): Promise<Record<string, unknown>[]>
   return rows as Record<string, unknown>[];
 }
 
+export interface ExpiringClient {
+  username: string;
+  name: string | null;
+  mobile: string | null;
+  phone: string | null;
+  expiration: Date;
+  daysLeft: number; // 3 (three-day reminder) or 0 (expires today)
+}
+
+/**
+ * Active clients (enableuser=1) with a mobile on file whose account expires today or in exactly 3
+ * days. NOTE: autorenew is intentionally NOT filtered — in this RADIUS Manager it defaults to 1 for
+ * ~99.5% of accounts (it does not mean automatic billing), so filtering it would notify nobody.
+ * Drives the WhatsApp expiry reminders. Returns null if RADIUS isn't configured/reachable.
+ */
+export async function getExpiringClients(): Promise<ExpiringClient[] | null> {
+  const p = getPool();
+  if (!p) return null;
+  try {
+    const rows = await q(
+      p,
+      `SELECT username, firstname, lastname, company, mobile, phone, expiration,
+              DATEDIFF(DATE(expiration), CURDATE()) AS days_left
+         FROM rm_users
+        WHERE enableuser = 1
+          AND mobile IS NOT NULL AND mobile <> ''
+          AND DATE(expiration) IN (CURDATE(), DATE_ADD(CURDATE(), INTERVAL 3 DAY))`
+    );
+    return rows.map((r) => ({
+      username: String(r.username ?? ""),
+      name: [r.firstname, r.lastname].filter(Boolean).join(" ").trim() || String(r.company ?? "").trim() || null,
+      mobile: String(r.mobile ?? "").trim() || null,
+      phone: String(r.phone ?? "").trim() || null,
+      expiration: new Date(r.expiration as string),
+      daysLeft: Number(r.days_left),
+    }));
+  } catch (e) {
+    console.error("[radius] getExpiringClients failed:", (e as Error)?.message);
+    return null;
+  }
+}
+
 /** Fetches RADIUS enrichment. Returns null if RADIUS isn't configured/reachable. */
 export async function getRadiusData(): Promise<RadiusData | null> {
   const p = getPool();

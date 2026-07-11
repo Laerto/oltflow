@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { rebootOnuSchema, JOB_NAMES } from "@oltflow/core";
-import { requireUser } from "@/lib/auth";
 import { guardOnuAccess } from "@/lib/olt-access";
+import { requirePerm } from "@/lib/authorize";
 import { enqueueJob } from "@/lib/queue";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  // Granular permission (Phase 2) — replaces blanket OPERATE tier for reboot.
+  const auth = await requirePerm("onu.reboot");
+  if ("error" in auth) return auth.error;
   const { id } = await params;
   const denied = await guardOnuAccess(Number(id));
   if (denied) return denied;
