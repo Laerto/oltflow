@@ -85,7 +85,10 @@ export function WifiModal({
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <Alert className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300">
-            <AlertDescription>Dërgohet via TR-069 — efekt pas 1-2 min</AlertDescription>
+            <AlertDescription>
+              Dërgohet via TR-069 — efekt pas 1-2 min. <b>Mbush vetëm fushat që do të ndryshosh</b> — SSID-i
+              dhe fjalëkalimi janë të pavarur (mund të ndryshosh vetëm njërin). Fushat bosh mbeten si janë.
+            </AlertDescription>
           </Alert>
 
           <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">WiFi 2.4 GHz</div>
@@ -96,7 +99,7 @@ export function WifiModal({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Password 2.4G</Label>
-              <Input type="password" value={pass2g} onChange={(e) => setPass2g(e.target.value)} placeholder="••••••••" />
+              <Input type="password" value={pass2g} onChange={(e) => setPass2g(e.target.value)} placeholder="Lëre bosh = pa ndryshim" />
             </div>
           </div>
 
@@ -108,7 +111,7 @@ export function WifiModal({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Password 5G</Label>
-              <Input type="password" value={pass5g} onChange={(e) => setPass5g(e.target.value)} placeholder="••••••••" />
+              <Input type="password" value={pass5g} onChange={(e) => setPass5g(e.target.value)} placeholder="Lëre bosh = pa ndryshim" />
             </div>
           </div>
 

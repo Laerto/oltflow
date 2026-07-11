@@ -535,11 +535,14 @@ export async function updateWifi(
     params2g.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", params.ssid2g, "xsd:string"]);
   }
   if (params.pass2g) {
+    // ZTE F673AV9 exposes the WPA passphrase at WLANConfiguration.{i}.KeyPassphrase — it does NOT
+    // have PreSharedKey.1.KeyPassphrase, so setting that path faulted the whole task (cwmp.9003
+    // Invalid arguments) and the password never changed while the SSID did. Use KeyPassphrase.
     params2g.push(
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.BeaconType", "11i", "xsd:string"],
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.IEEE11iEncryptionModes", "AESEncryption", "xsd:string"],
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.IEEE11iAuthenticationMode", "PSKAuthentication", "xsd:string"],
-      ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", params.pass2g, "xsd:string"]
+      ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", params.pass2g, "xsd:string"]
     );
   }
   if (params.enable5g !== undefined) {
@@ -558,7 +561,7 @@ export async function updateWifi(
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.BeaconType", "11i", "xsd:string"],
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.IEEE11iEncryptionModes", "AESEncryption", "xsd:string"],
       ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.IEEE11iAuthenticationMode", "PSKAuthentication", "xsd:string"],
-      ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.PreSharedKey.1.KeyPassphrase", params.pass5g, "xsd:string"]
+      ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase", params.pass5g, "xsd:string"]
     );
   }
 
