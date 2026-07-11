@@ -223,42 +223,43 @@ export default function OnuDetailPage() {
             {connectionKind === "route" && <> · <Badge variant="secondary">Route</Badge></>}
           </div>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <Button variant="secondary" onClick={doRefresh} disabled={refreshing || epon} title={epon ? "Rifreskimi CLI nuk është ende i implementuar për EPON" : undefined}>
+        {/* Compact toolbar: frequent, SAFE support actions stay visible; impactful/rare ones
+            (reboot, replace, delete) live behind "···". PPPoE is edited from the WAN/PPPoE card. */}
+        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
+          <Button size="sm" variant="secondary" onClick={doRefresh} disabled={refreshing || epon} title={epon ? "Rifreskimi CLI s'mbështetet për EPON" : "Rifresko gjendjen nga OLT"}>
             {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Rifresko
           </Button>
           {operate && (
-            <Button variant="default" onClick={() => setPppoeOpen(true)} disabled={epon} title={epon ? "PPPoE nuk është i mbështetur për EPON ende" : undefined}>
-              <Lock className="h-4 w-4" /> Ndrysho PPPoE
+            <Button size="sm" variant="outline" onClick={setMyLocation} title="Ruaj vendndodhjen GPS të klientit (harta)">
+              <MapPin className="h-4 w-4" /> Vendndodhja
+            </Button>
+          )}
+          {operate && (
+            <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)} title="Ndrysho emrin e klientit (gabim regjistrimi)">
+              <Pencil className="h-4 w-4" /> Emri
+            </Button>
+          )}
+          {operate && !epon && (
+            <Button size="sm" variant="outline" onClick={doPushAcs} disabled={acsBusy} title="Konfiguro ACS/TR-069 te CPE — fillon të informojë GenieACS pa hyrë në web-in e saj">
+              {acsBusy ? <Spinner /> : <Cloud className="h-4 w-4" />} ACS
             </Button>
           )}
           {operate && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary">
-                  <MoreHorizontal className="h-4 w-4" /> Veprime
+                <Button size="sm" variant="outline" title="Më shumë veprime" aria-label="Më shumë veprime">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => setRenameOpen(true)}>
-                  <Pencil className="h-4 w-4" /> Edito emrin
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onClick={doReboot} disabled={rebooting || !wifi?.deviceId}>
+                  <Power className="h-4 w-4" /> Reboot ONU
                 </DropdownMenuItem>
-                {!epon && (
-                  <DropdownMenuItem onClick={doPushAcs} disabled={acsBusy}>
-                    <Cloud className="h-4 w-4" /> Konfiguro ACS (TR-069)
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem onClick={() => setTicketOpen(true)}>
                   <Wrench className="h-4 w-4" /> Hap tiket
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={setMyLocation}>
-                  <MapPin className="h-4 w-4" /> Ruaj vendndodhjen
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={doWanAccess} disabled={wanBusy || epon}>
                   <Globe className="h-4 w-4" /> Akses WAN
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={doReboot} disabled={rebooting || !wifi?.deviceId}>
-                  <Power className="h-4 w-4" /> Reboot ONU
                 </DropdownMenuItem>
                 {admin && (
                   <DropdownMenuItem onClick={() => setReplaceOpen(true)} disabled={epon}>
