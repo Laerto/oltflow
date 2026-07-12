@@ -12,7 +12,8 @@ export type AlarmType =
   | "onu.signal.danger"
   | "onu.expiry"
   | "olt.unreachable"
-  | "pon.outage";
+  | "pon.outage"
+  | "client.offline";
 
 export type AlarmSeverity = "critical" | "warning";
 

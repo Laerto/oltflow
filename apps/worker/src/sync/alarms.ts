@@ -6,6 +6,8 @@ import {
   type OpenAlarmInput,
   type AlarmType,
 } from "@oltflow/db";
+import { onuConnectionKind } from "@oltflow/core";
+import { getRadiusData, normalizeMac } from "../radius.js";
 import { notifyNewAlarms, clearNotifyDedup } from "../notify/engine.js";
 
 /**
@@ -67,6 +69,9 @@ async function openAndNotify(inputs: OpenAlarmInput[]): Promise<number> {
     }
     if (a.type === "pon.outage") {
       return { ...a, detail: `🟠 <b>PON outage</b>: ${a.title}` };
+    }
+    if (a.type === "client.offline") {
+      return { ...a, detail: `📴 <b>Klient offline</b> (ONU online, PPPoE i rënë) — ${a.title}: ${a.detail ?? ""}` };
     }
     return a;
   });
@@ -185,6 +190,63 @@ export async function checkAlarms(): Promise<number> {
     const still = activeKeys.get("onu.offline") ?? new Set();
     for (const a of before) {
       if (!still.has(a.key)) await clearNotifyDedup(a.key);
+    }
+  }
+
+  // ── Client offline behind an ONLINE ONU (bridge Mikrotik / route PPPoE dropped) ──────────
+  // The blind spot: the ONU is `working` (PON up) so support thinks the client is fine, but the
+  // subscriber's PPPoE session is down (bridge Mikrotik powered off / line dropped). We detect it
+  // from RADIUS: an online ONU that is EXPECTED to carry a session (route → has pppoeUser; bridge →
+  // has learned a downstream MAC and had an IP before) but currently has NO active session.
+  // getRadiusData() returns null if RADIUS is unreachable → skip entirely (never false-alarm on a
+  // RADIUS outage).
+  {
+    const radius = await getRadiusData();
+    if (radius) {
+      const inputs: OpenAlarmInput[] = [];
+      let c = 0;
+      for (;;) {
+        const rows = await prisma.onu.findMany({
+          where: {
+            id: { gt: c },
+            state: "working",
+            ...(offlineOltIds.size ? { oltId: { notIn: [...offlineOltIds] } } : {}),
+          },
+          orderBy: { id: "asc" },
+          take: CHUNK,
+          select: { id: true, name: true, serial: true, ponPort: true, oltId: true, type: true, mac: true, mgmtIp: true, pppoeUser: true, olt: { select: { name: true } } },
+        });
+        if (rows.length === 0) break;
+        c = rows[rows.length - 1]!.id;
+        for (const o of rows) {
+          const kind = onuConnectionKind(o.type);
+          const macKey = o.mac ? normalizeMac(o.mac) : "";
+          const session = macKey ? radius.byMac.get(macKey) : undefined;
+          const user = o.pppoeUser || session?.username || null;
+          const client = user ? radius.byUsername.get(user) : undefined;
+          const hasSession = kind === "bridge" ? Boolean(session?.liveIp) : Boolean(client?.liveIp || session?.liveIp);
+          // Expected to carry a session: route with a pppoeUser, or a bridge ONU we've seen up before
+          // (sticky mgmtIp) with a learned downstream MAC.
+          const expected = kind === "route" ? Boolean(o.pppoeUser) : Boolean(o.mgmtIp && o.mac);
+          if (expected && !hasSession) {
+            const key = `client.offline:${o.id}`;
+            mark("client.offline", key);
+            inputs.push({
+              key,
+              type: "client.offline" as const,
+              severity: "critical" as const,
+              oltId: o.oltId,
+              onuId: o.id,
+              title: `${o.name || o.ponPort} — klient offline`,
+              detail: `${o.olt.name} · ONU online por PPPoE i rënë${o.mgmtIp ? ` · ${o.mgmtIp}` : ""}${user ? ` · ${user}` : ""}`,
+              href: `/onus/${o.id}`,
+            });
+          }
+        }
+        if (rows.length < CHUNK) break;
+      }
+      notified += await openAndNotify(inputs);
+      await clearAlarmsExcept("client.offline", activeKeys.get("client.offline") ?? new Set());
     }
   }
 
