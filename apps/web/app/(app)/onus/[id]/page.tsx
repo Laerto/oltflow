@@ -54,7 +54,8 @@ const OnuLivePanel = dynamic(
   { ssr: false }
 );
 
-type OnuDetail = OnuRow & { oltId: number; oltName: string };
+type SignalThresholds = { good: number; warning: number; danger: number };
+type OnuDetail = OnuRow & { oltId: number; oltName: string; signalThresholds?: SignalThresholds };
 
 interface LiveExtras {
   history?: { authTime: string; offlineTime: string; cause: string }[];
@@ -318,30 +319,32 @@ export default function OnuDetailPage() {
         <SectionCard title={<><Activity className="inline h-4 w-4" /> Sinjali Optik</>}>
             <div className="p-4">
               {hasSignal ? (
-                <>
-                  {(() => {
-                    const sig = signalBandStyle(onu.onuRx);
-                    return (
-                      <div className="mb-3 rounded-lg border border-border bg-muted/30 p-2.5">
-                        <div className="mb-1.5 flex items-center justify-between gap-2">
-                          <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium ${sig.chip}`}>
-                            <span className={`h-2 w-2 rounded-full ${sig.dot}`} /> {sig.label}
-                          </span>
-                          <span className={`font-mono text-sm font-bold ${sig.text}`}>{onu.onuRx} dBm</span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                          <div className={`h-full rounded-full transition-all ${sig.dot}`} style={{ width: `${sig.pct}%` }} />
-                        </div>
+                (() => {
+                  const th = onu.signalThresholds ?? { good: -25, warning: -27, danger: -30 };
+                  const levels = [onu.onuRx, onu.oltRx].map((v) => metricStyle(v, "rx", th).level);
+                  const worst = levels.includes("critical") ? "critical" : levels.includes("warning") ? "warning" : levels.includes("good") ? "good" : "unknown";
+                  const sum = SIGNAL_SUMMARY[worst];
+                  return (
+                    <>
+                      <div className={`mb-3 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${sum.chip}`}>
+                        <span className="flex items-center gap-1.5 text-sm font-semibold">
+                          <span className={`h-2.5 w-2.5 rounded-full ${sum.dot}`} /> {sum.label}
+                        </span>
+                        <span className="font-mono text-[10px] opacity-70" title="Threshold-et RX (nga Admin → Settings)">
+                          OK&gt;{th.good} · Kujdes&gt;{th.warning}
+                        </span>
                       </div>
-                    );
-                  })()}
-                  <div className="mb-2.5 grid grid-cols-2 gap-2">
-                    <SigBox label="ONU RX dBm" value={onu.onuRx} color={signalColor(onu.onuRx)} />
-                    <SigBox label="ONU TX dBm" value={onu.onuTx} color="text-emerald-600" />
-                    <SigBox label="OLT RX dBm" value={onu.oltRx} color="text-emerald-600" />
-                    <SigBox label="OLT TX dBm" value={onu.oltTx} color="text-emerald-600" />
-                  </div>
-                </>
+                      <div className="divide-y divide-border/40">
+                        <MetricRow label="ONU RX" value={onu.onuRx} unit="dBm" style={metricStyle(onu.onuRx, "rx", th)} />
+                        <MetricRow label="OLT RX" value={onu.oltRx} unit="dBm" style={metricStyle(onu.oltRx, "rx", th)} />
+                        <MetricRow label="ONU TX" value={onu.onuTx} unit="dBm" style={metricStyle(onu.onuTx, "tx", th)} />
+                        <MetricRow label="OLT TX" value={onu.oltTx} unit="dBm" style={metricStyle(onu.oltTx, "tx", th)} />
+                        <MetricRow label="Att UP" value={onu.attenUp} unit="dB" style={metricStyle(onu.attenUp, "att", th)} />
+                        <MetricRow label="Att DOWN" value={onu.attenDown} unit="dB" style={metricStyle(onu.attenDown, "att", th)} />
+                      </div>
+                    </>
+                  );
+                })()
               ) : (
                 <div className="text-xs text-muted-foreground">Sinjali nuk disponohet — kliko &ldquo;Rifresko nga OLT&rdquo;</div>
               )}
@@ -509,28 +512,56 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function SigBox({ label, value, color }: { label: string; value: number | null; color: string }) {
+type SigLevel = "good" | "warning" | "critical" | "unknown";
+const LEVEL_STYLE: Record<SigLevel, { dot: string; bar: string; text: string }> = {
+  good: { dot: "bg-emerald-500", bar: "bg-emerald-500", text: "text-emerald-600" },
+  warning: { dot: "bg-amber-500", bar: "bg-amber-500", text: "text-amber-600" },
+  critical: { dot: "bg-rose-500", bar: "bg-rose-500", text: "text-rose-600" },
+  unknown: { dot: "bg-muted-foreground/40", bar: "bg-muted-foreground/30", text: "text-muted-foreground" },
+};
+const SIGNAL_SUMMARY: Record<SigLevel, { label: string; chip: string; dot: string }> = {
+  good: { label: "I shëndetshëm", chip: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600", dot: "bg-emerald-500" },
+  warning: { label: "Kujdes", chip: "border-amber-500/30 bg-amber-500/10 text-amber-600", dot: "bg-amber-500" },
+  critical: { label: "Kritik", chip: "border-rose-500/30 bg-rose-500/10 text-rose-600", dot: "bg-rose-500" },
+  unknown: { label: "—", chip: "border-border text-muted-foreground", dot: "bg-muted-foreground/40" },
+};
+const clampPct = (n: number) => Math.max(3, Math.min(100, n));
+
+/** Per-metric visual style: colour by band + a 0–100% bar position within a sensible window. RX uses
+ * the configurable thresholds (−28→−8 dBm window); TX is informational; Att is worse-when-higher. */
+function metricStyle(
+  value: number | null | undefined,
+  kind: "rx" | "tx" | "att",
+  th: SignalThresholds
+): { dot: string; bar: string; text: string; pct: number; level: SigLevel } {
+  if (value == null) return { ...LEVEL_STYLE.unknown, pct: 0, level: "unknown" };
+  let level: SigLevel;
+  let pct: number;
+  if (kind === "rx") {
+    level = value >= th.good ? "good" : value >= th.warning ? "warning" : "critical";
+    pct = clampPct(((value - -28) / (-8 - -28)) * 100);
+  } else if (kind === "tx") {
+    level = "good";
+    pct = clampPct(((value - -5) / (12 - -5)) * 100);
+  } else {
+    level = value <= 25 ? "good" : value <= 28 ? "warning" : "critical";
+    pct = clampPct(((32 - value) / (32 - 10)) * 100);
+  }
+  return { ...LEVEL_STYLE[level], pct, level };
+}
+
+function MetricRow({ label, value, unit, style }: { label: string; value: number | null; unit: string; style: ReturnType<typeof metricStyle> }) {
   return (
-    <div className="flex-1 rounded-lg bg-muted p-3 text-center">
-      <div className={`font-mono text-base font-bold ${color}`}>{value}</div>
-      <div className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{label}</div>
+    <div className="py-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} /> {label}
+        </span>
+        <span className={`font-mono text-[13px] font-semibold ${style.text}`}>{value ?? "—"} {unit}</span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className={`h-full rounded-full transition-all ${style.bar}`} style={{ width: `${style.pct}%` }} />
+      </div>
     </div>
   );
-}
-
-
-function signalColor(rx: number | null): string {
-  const b = classifySignal(rx);
-  return b === "good" ? "text-emerald-600" : b === "warning" ? "text-amber-600" : b === "critical" ? "text-rose-600" : "text-muted-foreground";
-}
-
-/** ONU-RX quality → label + colours + a 0-100% bar (mapped from a typical −30…−8 dBm window),
- * so the optical health reads at a glance (green good · amber borderline · red weak). */
-function signalBandStyle(rx: number | null): { label: string; pct: number; text: string; dot: string; chip: string } {
-  const b = classifySignal(rx);
-  const pct = rx == null ? 0 : Math.max(4, Math.min(100, ((rx - -30) / (-8 - -30)) * 100));
-  if (b === "good") return { label: "Sinjal i mirë", pct, text: "text-emerald-600", dot: "bg-emerald-500", chip: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600" };
-  if (b === "warning") return { label: "Sinjal kufitar", pct, text: "text-amber-600", dot: "bg-amber-500", chip: "border-amber-500/30 bg-amber-500/10 text-amber-600" };
-  if (b === "critical") return { label: "Sinjal i dobët", pct, text: "text-rose-600", dot: "bg-rose-500", chip: "border-rose-500/30 bg-rose-500/10 text-rose-600" };
-  return { label: "—", pct: 0, text: "text-muted-foreground", dot: "bg-muted-foreground/40", chip: "border-border text-muted-foreground" };
 }

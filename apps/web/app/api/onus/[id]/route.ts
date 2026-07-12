@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@oltflow/db";
+import { prisma, getSignalThresholds } from "@oltflow/db";
 import { getWanIpsBySerial } from "@oltflow/adapters";
 import { JOB_NAMES, isEponPort, onuConnectionKind, TIER } from "@oltflow/core";
 import { requireUser } from "@/lib/auth";
@@ -25,7 +25,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     : new Map<string, string>();
   const acsIp = (onu.serial && wanIps.get(onu.serial.toUpperCase())) || null;
   const bridge = onuConnectionKind(onu.type) === "bridge";
+  const th = await getSignalThresholds().catch(() => ({ good: -25, warning: -27, danger: -30 }));
   return NextResponse.json({
+    signalThresholds: { good: th.good, warning: th.warning, danger: th.danger },
     id: onu.id,
     oltId: onu.oltId,
     oltName: onu.olt.name,
