@@ -285,7 +285,7 @@ export default function OnuDetailPage() {
         </div>
       )}
 
-      <div className="grid items-start gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <SectionCard
           title={
             <div className="flex flex-col gap-1">
@@ -303,17 +303,15 @@ export default function OnuDetailPage() {
             </div>
           }
         >
-          <div className="px-4">
-            <InfoRow label="OLT" value={onu.oltName} />
-            <InfoRow label="OLT Interface" value={<span className="font-mono">{onu.ponPort}</span>} />
-            <InfoRow label="Emri" value={<strong>{onu.name || "N/A"}</strong>} />
-            <InfoRow label="Tipi ONU" value={<Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-600">{onu.type || "N/A"}</Badge>} />
-            <InfoRow label="Serial Number" value={<span className="font-mono">{onu.serial || "N/A"}</span>} />
-            <InfoRow label="ONU Distance" value={onu.distance || "N/A"} />
-            <InfoRow label="Online Duration" value={<span className="text-emerald-600">{onu.onlineDuration || "N/A"}</span>} />
-            <InfoRow label="Line Profile" value={<Badge>{onu.lineProfile || "N/A"}</Badge>} />
-            <InfoRow label="Service Profile" value={<Badge>{onu.serviceProfile || "N/A"}</Badge>} />
-            <InfoRow label="VLAN" value={<Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-600">{onu.vlan || "N/A"}</Badge>} />
+          <div className="grid grid-cols-2 gap-x-4 px-4">
+            <MiniField label="OLT" value={onu.oltName} />
+            <MiniField label="VLAN" value={<Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-600">{onu.vlan || "N/A"}</Badge>} />
+            <MiniField label="Tipi" value={<Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-600">{onu.type || "N/A"}</Badge>} />
+            <MiniField label="Distanca" value={onu.distance || "N/A"} />
+            <MiniField label="Line Profile" value={<Badge>{onu.lineProfile || "N/A"}</Badge>} />
+            <MiniField label="Service Profile" value={<Badge>{onu.serviceProfile || "N/A"}</Badge>} />
+            <MiniField label="Online" value={<span className="text-emerald-600">{onu.onlineDuration || "N/A"}</span>} />
+            <MiniField label="Serial" value={<span className="font-mono text-xs">{onu.serial || "N/A"}</span>} />
           </div>
         </SectionCard>
 
@@ -488,6 +486,17 @@ function SectionCard({
       </div>
       <div>{children}</div>
     </Card>
+  );
+}
+
+/** Compact stacked label/value cell — used in the ONU-info 2-column grid so the card stays short
+ * and lines up in height with the Signal / WAN cards beside it. */
+function MiniField({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-0 border-b border-border/40 py-2">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-0.5 truncate text-[13px] font-medium">{value}</div>
+    </div>
   );
 }
 
