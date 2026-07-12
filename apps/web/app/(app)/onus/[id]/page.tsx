@@ -371,9 +371,15 @@ export default function OnuDetailPage() {
                   )
                 }
               />
-              <InfoRow label="WAN Mode" value={onu.pppoeUser ? "PPPoE" : "Profile (OMCI)"} />
-              <InfoRow label="PPPoE User" value={onu.pppoeUser ? <span className="font-mono text-blue-600">{onu.pppoeUser}</span> : "–"} />
-              <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-muted-foreground">rifresko për ta parë</span>} />
+              <InfoRow label="WAN Mode" value={onu.pppoeUser ? "PPPoE" : connectionKind === "bridge" ? "Bridge (Mikrotik → PPPoE)" : "Profile (OMCI)"} />
+              {connectionKind === "bridge" ? (
+                <InfoRow label="Mikrotik MAC" value={onu.mac ? <span className="font-mono text-xs text-blue-600">{onu.mac}</span> : <span className="text-muted-foreground">–</span>} />
+              ) : (
+                <>
+                  <InfoRow label="PPPoE User" value={onu.pppoeUser ? <span className="font-mono text-blue-600">{onu.pppoeUser}</span> : "–"} />
+                  <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-muted-foreground">rifresko për ta parë</span>} />
+                </>
+              )}
             </div>
           </SectionCard>
       </div>
