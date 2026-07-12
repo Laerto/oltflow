@@ -294,9 +294,9 @@ export default function OnuDetailPage() {
         </div>
       )}
 
-      <div className="grid items-start gap-4 lg:grid-cols-3">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <SectionCard title={<><ClipboardList className="inline h-4 w-4" /> Informacioni ONU <Badge variant={stateBadgeColor(onu.state)}>● {onu.state === "working" ? "Online" : "Offline"}</Badge></>}>
-          <div className="px-4">
+          <div className="grid gap-x-6 px-4 sm:grid-cols-2">
             <InfoRow label="OLT" value={onu.oltName} />
             <InfoRow label="OLT Interface" value={<span className="font-mono">{onu.ponPort}</span>} />
             <InfoRow label="Emri" value={<strong>{onu.name || "N/A"}</strong>} />
@@ -310,7 +310,8 @@ export default function OnuDetailPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title={<><Activity className="inline h-4 w-4" /> Sinjali Optik</>}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SectionCard title={<><Activity className="inline h-4 w-4" /> Sinjali Optik</>}>
             <div className="p-4">
               {hasSignal ? (
                 <>
@@ -364,6 +365,7 @@ export default function OnuDetailPage() {
               <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-muted-foreground">rifresko për ta parë</span>} />
             </div>
           </SectionCard>
+        </div>
       </div>
 
       {/* ACS / TR-069 panel — direkt poshtë ONU Information; menaxhon SSID/pass/on-off të CPE-së. */}
