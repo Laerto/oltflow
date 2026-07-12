@@ -285,7 +285,7 @@ export default function OnuDetailPage() {
         </div>
       )}
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-3">
         <SectionCard
           title={
             <div className="flex flex-col gap-1">
@@ -303,7 +303,7 @@ export default function OnuDetailPage() {
             </div>
           }
         >
-          <div className="grid gap-x-6 px-4 sm:grid-cols-2">
+          <div className="px-4">
             <InfoRow label="OLT" value={onu.oltName} />
             <InfoRow label="OLT Interface" value={<span className="font-mono">{onu.ponPort}</span>} />
             <InfoRow label="Emri" value={<strong>{onu.name || "N/A"}</strong>} />
@@ -317,8 +317,7 @@ export default function OnuDetailPage() {
           </div>
         </SectionCard>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SectionCard title={<><Activity className="inline h-4 w-4" /> Sinjali Optik</>}>
+        <SectionCard title={<><Activity className="inline h-4 w-4" /> Sinjali Optik</>}>
             <div className="p-4">
               {hasSignal ? (
                 <>
@@ -343,18 +342,6 @@ export default function OnuDetailPage() {
                     <SigBox label="ONU TX dBm" value={onu.onuTx} color="text-emerald-600" />
                     <SigBox label="OLT RX dBm" value={onu.oltRx} color="text-emerald-600" />
                     <SigBox label="OLT TX dBm" value={onu.oltTx} color="text-emerald-600" />
-                  </div>
-                  <div className="flex gap-2 text-[11px]">
-                    <div className="flex-1 rounded-md bg-muted px-3 py-2">
-                      <span className="text-muted-foreground">Att UP</span>
-                      <br />
-                      <b>{onu.attenUp} dB</b>
-                    </div>
-                    <div className="flex-1 rounded-md bg-muted px-3 py-2">
-                      <span className="text-muted-foreground">Att DOWN</span>
-                      <br />
-                      <b>{onu.attenDown} dB</b>
-                    </div>
                   </div>
                 </>
               ) : (
@@ -388,7 +375,6 @@ export default function OnuDetailPage() {
               <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-muted-foreground">rifresko për ta parë</span>} />
             </div>
           </SectionCard>
-        </div>
       </div>
 
       {/* ACS / TR-069 panel — direkt poshtë ONU Information; menaxhon SSID/pass/on-off të CPE-së. */}
