@@ -120,23 +120,6 @@ export function OnuCpePanel({
     }
   }
 
-  async function factoryReset() {
-    if (!acs?.deviceId || acs.pending) return;
-    if (!confirm("Factory reset i CPE via TR-069? Klienti humbet WiFi/PPPoE config derisa të riprovizionojë.")) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const { jobId } = await api.onuAcsFactoryReset(onuId, acs.deviceId);
-      const job = await pollJob(jobId);
-      if (job.status === "failed") throw new Error(job.error ?? "Dështoi");
-      setMsg((job.output as { message?: string })?.message ?? "Factory reset u dërgua");
-    } catch (e) {
-      setMsg(e instanceof ApiError || e instanceof Error ? e.message : "Gabim");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (acs === undefined) {
     return <Card className="p-4 text-xs text-muted-foreground">Duke ngarkuar CPE mirror…</Card>;
   }
@@ -176,11 +159,6 @@ export function OnuCpePanel({
           <Button size="sm" variant="secondary" onClick={refresh} disabled={busy}>
             <RefreshCw className={`mr-1 h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh from ACS
           </Button>
-          {canOperate && !acs.pending && (
-            <Button size="sm" variant="destructive" onClick={factoryReset} disabled={busy}>
-              <Power className="mr-1 h-3.5 w-3.5" /> Factory reset
-            </Button>
-          )}
         </div>
       </div>
       {msg && <p className="text-xs text-muted-foreground">{msg}</p>}

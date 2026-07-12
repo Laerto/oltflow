@@ -207,21 +207,12 @@ export default function OnuDetailPage() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-            <button onClick={() => router.push("/onus")} className="flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 hover:bg-muted">
-              <ChevronLeft className="h-3 w-3" /> Kthehu
-            </button>
-            <span>ONU-të &gt; {onu.ponPort}</span>
-          </div>
-          <div className="text-xl font-bold text-foreground">{onu.name || onu.ponPort}</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            {onu.ponPort} · {onu.type || "–"} · SN: {onu.serial || "N/A"}
-            {epon && <> · <Badge variant="secondary">EPON</Badge></>}
-            {connectionKind === "bridge" && <> · <Badge variant="secondary">Bridge</Badge></>}
-            {connectionKind === "route" && <> · <Badge variant="secondary">Route</Badge></>}
-          </div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <button onClick={() => router.push("/onus")} className="flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 hover:bg-muted">
+            <ChevronLeft className="h-3 w-3" /> Kthehu
+          </button>
+          <span>ONU-të &gt; <span className="font-mono">{onu.ponPort}</span></span>
         </div>
         {/* Compact toolbar: frequent, SAFE support actions stay visible; impactful/rare ones
             (reboot, replace, delete) live behind "···". PPPoE is edited from the WAN/PPPoE card. */}
@@ -295,7 +286,23 @@ export default function OnuDetailPage() {
       )}
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        <SectionCard title={<><ClipboardList className="inline h-4 w-4" /> Informacioni ONU <Badge variant={stateBadgeColor(onu.state)}>● {onu.state === "working" ? "Online" : "Offline"}</Badge></>}>
+        <SectionCard
+          title={
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                <span className="text-base font-bold leading-tight">{onu.name || onu.ponPort}</span>
+                <Badge variant={stateBadgeColor(onu.state)}>● {onu.state === "working" ? "Online" : "Offline"}</Badge>
+                {epon && <Badge variant="secondary">EPON</Badge>}
+                {connectionKind === "bridge" && <Badge variant="secondary">Bridge</Badge>}
+                {connectionKind === "route" && <Badge variant="secondary">Route</Badge>}
+              </div>
+              <div className="text-xs font-normal text-muted-foreground">
+                <span className="font-mono">{onu.ponPort}</span> · {onu.type || "–"} · SN: <span className="font-mono">{onu.serial || "N/A"}</span>
+              </div>
+            </div>
+          }
+        >
           <div className="grid gap-x-6 px-4 sm:grid-cols-2">
             <InfoRow label="OLT" value={onu.oltName} />
             <InfoRow label="OLT Interface" value={<span className="font-mono">{onu.ponPort}</span>} />
@@ -315,6 +322,22 @@ export default function OnuDetailPage() {
             <div className="p-4">
               {hasSignal ? (
                 <>
+                  {(() => {
+                    const sig = signalBandStyle(onu.onuRx);
+                    return (
+                      <div className="mb-3 rounded-lg border border-border bg-muted/30 p-2.5">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium ${sig.chip}`}>
+                            <span className={`h-2 w-2 rounded-full ${sig.dot}`} /> {sig.label}
+                          </span>
+                          <span className={`font-mono text-sm font-bold ${sig.text}`}>{onu.onuRx} dBm</span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                          <div className={`h-full rounded-full transition-all ${sig.dot}`} style={{ width: `${sig.pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="mb-2.5 grid grid-cols-2 gap-2">
                     <SigBox label="ONU RX dBm" value={onu.onuRx} color={signalColor(onu.onuRx)} />
                     <SigBox label="ONU TX dBm" value={onu.onuTx} color="text-emerald-600" />
@@ -472,10 +495,10 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <Card className={cn("py-4", className)}>
+    <Card className={cn("border-border/70 py-4 shadow-sm", className)}>
       <div className="flex items-start justify-between gap-4 px-4 pb-3">
         <div className="font-semibold leading-none">{title}</div>
-        {action ? <div>{action}</div> : null}
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       <div>{children}</div>
     </Card>
@@ -504,4 +527,15 @@ function SigBox({ label, value, color }: { label: string; value: number | null; 
 function signalColor(rx: number | null): string {
   const b = classifySignal(rx);
   return b === "good" ? "text-emerald-600" : b === "warning" ? "text-amber-600" : b === "critical" ? "text-rose-600" : "text-muted-foreground";
+}
+
+/** ONU-RX quality → label + colours + a 0-100% bar (mapped from a typical −30…−8 dBm window),
+ * so the optical health reads at a glance (green good · amber borderline · red weak). */
+function signalBandStyle(rx: number | null): { label: string; pct: number; text: string; dot: string; chip: string } {
+  const b = classifySignal(rx);
+  const pct = rx == null ? 0 : Math.max(4, Math.min(100, ((rx - -30) / (-8 - -30)) * 100));
+  if (b === "good") return { label: "Sinjal i mirë", pct, text: "text-emerald-600", dot: "bg-emerald-500", chip: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600" };
+  if (b === "warning") return { label: "Sinjal kufitar", pct, text: "text-amber-600", dot: "bg-amber-500", chip: "border-amber-500/30 bg-amber-500/10 text-amber-600" };
+  if (b === "critical") return { label: "Sinjal i dobët", pct, text: "text-rose-600", dot: "bg-rose-500", chip: "border-rose-500/30 bg-rose-500/10 text-rose-600" };
+  return { label: "—", pct: 0, text: "text-muted-foreground", dot: "bg-muted-foreground/40", chip: "border-border text-muted-foreground" };
 }
