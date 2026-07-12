@@ -330,6 +330,54 @@ export async function scanOltInventory(
   }
 }
 
+/**
+ * Detects the OLT product line from the CLI prompt (e.g. `KSAMIL-C300#` → "C300"). The C300 and
+ * C320 differ in per-ONU CLI (C300 has no `pon-onu-mng`; ONU config is under `interface gpon-onu_…`
+ * and per-ONU `show gpon onu detail-info` is rejected). Returns null if the prompt carries no model
+ * (then callers keep the default/C320 behaviour). Read-only — a single newline to echo the prompt.
+ */
+export async function detectOltModel(creds: OltCreds): Promise<"C300" | "C320" | null> {
+  const session = await login(creds);
+  try {
+    const out = await session.sendCommand("", 400);
+    const m = /(C3\d0)\s*#/i.exec(out);
+    return m ? (m[1].toUpperCase() as "C300" | "C320") : null;
+  } finally {
+    session.close();
+  }
+}
+
+/**
+ * C300 inventory read: on C300 `show gpon onu detail-info gpon-onu_…` is rejected, but the port's
+ * running-config lists every registered ONU as `onu <id> type <type> sn <serial>`. One command per
+ * PON port yields serial+type for all its ONUs (fast, reliable) — enough to identify ONUs, match
+ * the ACS mirror, and reconcile phantoms. Name/VLAN/bridge-route need the per-ONU config and are a
+ * follow-up. Read-only.
+ */
+export async function scanOltRegistrationsC300(
+  creds: OltCreds,
+  slots: number[],
+  portsPerSlot: number,
+  frame = 1
+): Promise<{ ponPort: string; serial: string; type: string }[]> {
+  const session = await login(creds);
+  try {
+    await session.sendCommand("terminal length 0", 500);
+    const rows: { ponPort: string; serial: string; type: string }[] = [];
+    for (const slot of slots) {
+      for (let port = 1; port <= portsPerSlot; port++) {
+        const out = await readReply(session, `show running-config interface gpon-olt_${frame}/${slot}/${port}`, 6000);
+        for (const m of out.matchAll(/^\s*onu (\d+) type (\S+) sn (\S+)/gm)) {
+          rows.push({ ponPort: `gpon-onu_${frame}/${slot}/${port}:${m[1]}`, serial: m[3].toUpperCase(), type: m[2] });
+        }
+      }
+    }
+    return rows;
+  } finally {
+    session.close();
+  }
+}
+
 /** Per-OLT signal sweep, ported from sync_service.py's sync_signals(). */
 export async function scanOltSignals(
   creds: OltCreds,
