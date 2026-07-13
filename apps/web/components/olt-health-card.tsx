@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
-import { Cpu, Thermometer, CircuitBoard, ChevronRight, type LucideIcon } from "lucide-react";
+import { Cpu, Thermometer, CircuitBoard, type LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
@@ -104,8 +103,10 @@ function KpiTile({
 }
 
 /** Professional OLT-health panel: fleet-card CPU% and temperature polled over SNMP. Replaces
- * the bulky per-PON bandwidth chart on the dashboard (that moved to the OLT detail page). */
-export function OltHealthCard({ oltId }: { oltId: number }) {
+ * the bulky per-PON bandwidth chart on the dashboard (that moved to the OLT detail page).
+ * `bare` drops the outer Card so this can be embedded as a section inside another card
+ * (dashboard merges it under the signal-distribution block with a thin divider). */
+export function OltHealthCard({ oltId, bare = false }: { oltId: number; bare?: boolean }) {
   const [data, setData] = useState<Health | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
 
@@ -130,22 +131,20 @@ export function OltHealthCard({ oltId }: { oltId: number }) {
   const hottest = cards.reduce<CardHealth | null>((m, c) => (!m || c.temp > m.temp ? c : m), null);
   const activeCount = cards.filter((c) => c.cpu > 0 || c.temp > 0).length;
 
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-          <Cpu className="h-4 w-4 text-primary" /> Gjendja e OLT-it
-          <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-            SNMP
-          </span>
-          {available && data && (
-            <span className="ml-auto text-xs font-normal text-muted-foreground">
-              {cards.length} karta · {activeCount} aktive
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+  const titleRow = (
+    <div className="flex items-center gap-2 text-sm font-semibold">
+      <Cpu className="h-4 w-4 text-primary" /> Gjendja e OLT-it
+      <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">SNMP</span>
+      {available && data && (
+        <span className="ml-auto text-xs font-normal text-muted-foreground">
+          {cards.length} karta · {activeCount} aktive
+        </span>
+      )}
+    </div>
+  );
+
+  const body = (
+    <>
         {available === false ? (
           <div className="py-6 text-center text-xs text-muted-foreground">
             SNMP jo i disponueshëm për këtë OLT — aktivizoje community-n read për CPU/temperaturë.
@@ -222,12 +221,21 @@ export function OltHealthCard({ oltId }: { oltId: number }) {
             </div>
           </>
         )}
-        <div className="mt-3 border-t border-border/50 pt-2 text-right">
-          <Link href={`/olts/${oltId}`} className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
-            Trafiku per-PON & detajet <ChevronRight className="h-3 w-3" />
-          </Link>
-        </div>
-      </CardContent>
+    </>
+  );
+
+  if (bare) {
+    return (
+      <div>
+        {titleRow}
+        <div className="mt-3">{body}</div>
+      </div>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-2">{titleRow}</CardHeader>
+      <CardContent>{body}</CardContent>
     </Card>
   );
 }

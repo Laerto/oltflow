@@ -9,8 +9,6 @@ import {
   Router,
   Server,
   SignalHigh,
-  SignalMedium,
-  SignalLow,
   Wifi,
   WifiOff,
   Lock,
@@ -99,34 +97,33 @@ const ACTION_LABELS: Record<string, { label: string; icon: LucideIcon }> = {
   "refresh-onu": { label: "ONU u rifreskua", icon: RefreshCw },
 };
 
-const LEGEND_TONE = {
-  emerald: "text-emerald-600",
-  amber: "text-amber-600",
-  rose: "text-rose-600",
+const DOT_TONE = {
+  emerald: "bg-emerald-500",
+  amber: "bg-amber-500",
+  rose: "bg-rose-500",
 } as const;
 
-function SignalLegend({
+/** Compact inline signal chip — a coloured dot, label, count and %, all on one line, so the
+ * signal-distribution block stays two rows tall instead of three big tiles. */
+function SignalChip({
   href,
-  icon: Icon,
   tone,
   label,
   value,
   pct,
 }: {
   href: string;
-  icon: LucideIcon;
-  tone: keyof typeof LEGEND_TONE;
+  tone: keyof typeof DOT_TONE;
   label: string;
   value: number;
   pct: number;
 }) {
   return (
-    <Link href={href} className="rounded-lg border border-border bg-card p-2.5 transition hover:bg-muted/50">
-      <div className={`flex items-center gap-1.5 text-xs font-medium ${LEGEND_TONE[tone]}`}>
-        <Icon className="h-4 w-4" /> {label}
-      </div>
-      <div className="mt-1 text-lg font-bold text-foreground">{value}</div>
-      <div className="text-[10px] text-muted-foreground">{pct.toFixed(0)}%</div>
+    <Link href={href} className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition hover:bg-muted/60">
+      <span className={`h-2 w-2 rounded-full ${DOT_TONE[tone]}`} />
+      <span className="font-medium text-foreground">{label}</span>
+      <span className="font-bold tabular-nums text-foreground">{value}</span>
+      <span className="text-[10px] text-muted-foreground">{pct.toFixed(0)}%</span>
     </Link>
   );
 }
@@ -227,25 +224,32 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-5 grid gap-4 lg:grid-cols-[1fr_360px]">
-        {/* Signal distribution across the online fleet */}
+        {/* Signal distribution + OLT health merged into one frame with a thin divider, so the
+            "at a glance" picture (fleet signal + CPU/temp/cards) fits above the fold. */}
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-              <SignalHigh className="h-4 w-4 text-primary" /> Shpërndarja e sinjaleve
-              <span className="ml-auto text-xs font-normal text-muted-foreground">{signalMix.online} online</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
-              <div className="bg-emerald-500" style={{ width: `${signalMix.pct(signalMix.good)}%` }} />
-              <div className="bg-amber-500" style={{ width: `${signalMix.pct(signalMix.warning)}%` }} />
-              <div className="bg-rose-500" style={{ width: `${signalMix.pct(signalMix.critical)}%` }} />
+          <CardContent className="space-y-3 pt-4">
+            {/* Signal distribution — compact bar + inline chips */}
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <SignalHigh className="h-4 w-4 text-primary" /> Shpërndarja e sinjaleve
+                <span className="ml-auto text-xs font-normal text-muted-foreground">{signalMix.online} online</span>
+              </div>
+              <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className="bg-emerald-500" style={{ width: `${signalMix.pct(signalMix.good)}%` }} />
+                <div className="bg-amber-500" style={{ width: `${signalMix.pct(signalMix.warning)}%` }} />
+                <div className="bg-rose-500" style={{ width: `${signalMix.pct(signalMix.critical)}%` }} />
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-2">
+                <SignalChip href="/onus?signal=good" tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
+                <SignalChip href="/onus?signal=warning" tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
+                <SignalChip href="/onus?signal=critical" tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
+              </div>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <SignalLegend href="/onus?signal=good" icon={SignalHigh} tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
-              <SignalLegend href="/onus?signal=warning" icon={SignalMedium} tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
-              <SignalLegend href="/onus?signal=critical" icon={SignalLow} tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
-            </div>
+
+            <div className="border-t border-border/60" />
+
+            {/* OLT health (CPU / temp / cards) — embedded section, no second frame */}
+            <OltHealthCard oltId={currentOlt.id} bare />
           </CardContent>
         </Card>
 
@@ -291,10 +295,6 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="mb-5">
-        <OltHealthCard oltId={currentOlt.id} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">

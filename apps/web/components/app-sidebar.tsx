@@ -15,6 +15,7 @@ import {
   Map as MapIcon,
   Shield,
   Radio,
+  Activity,
 } from "lucide-react";
 import { useOlts, useMe } from "@/app/(app)/providers";
 import { api } from "@/lib/api";
@@ -30,6 +31,8 @@ const NAV = [
   { href: "/unconfigured", label: "Unconfigured", icon: Plug, minTier: 1 },
   { href: "/provision", label: "Provizionim", icon: Settings2, minTier: 2 },
   { href: "/olts", label: "OLT", icon: Server, minTier: 1 },
+  // Resolves to the current OLT's detail page (per-PON bandwidth chart + chassis/uplink view).
+  { href: "__pon__", label: "Trafiku/PON", icon: Activity, minTier: 1 },
   { href: "/admin", label: "Admin", icon: Shield, minTier: 3 },
 ];
 
@@ -90,15 +93,22 @@ export function AppSidebar({
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 pb-3">
         {NAV.filter((item) => rank >= item.minTier).map((item) => {
+          const onOltDetail = /^\/olts\/\d+/.test(pathname); // a specific OLT page (has an id)
+          // "Trafiku/PON" points at the current OLT's detail page; "OLT" stays the list.
+          const href = item.href === "__pon__" ? (currentOlt ? `/olts/${currentOlt.id}` : "/olts") : item.href;
           const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard" || pathname === "/"
-              : pathname === item.href || pathname.startsWith(item.href + "/");
+            item.href === "__pon__"
+              ? onOltDetail
+              : item.href === "/olts"
+                ? pathname === "/olts"
+                : item.href === "/dashboard"
+                  ? pathname === "/dashboard" || pathname === "/"
+                  : pathname === item.href || pathname.startsWith(item.href + "/");
           const badge = item.href === "/unconfigured" && waiting > 0 ? waiting : null;
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] transition-all duration-200 ${
