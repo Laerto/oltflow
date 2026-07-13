@@ -133,7 +133,7 @@ export function OltHealthCard({ oltId, bare = false }: { oltId: number; bare?: b
 
   const titleRow = (
     <div className="flex items-center gap-2 text-sm font-semibold">
-      <Cpu className="h-4 w-4 text-primary" /> Gjendja e OLT-it
+      <Cpu className="h-4 w-4 text-primary" /> Gjendja e OLT
       <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">SNMP</span>
       {available && data && (
         <span className="ml-auto text-xs font-normal text-muted-foreground">

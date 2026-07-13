@@ -298,67 +298,73 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-        <div className="flex flex-col gap-3.5">
+        {/* Recent activity — the content-rich panel takes the main column */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <RefreshCw className="h-4 w-4 text-primary" /> Aktiviteti i fundit
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-[240px] overflow-y-auto">
+              {activity.length === 0 && <div className="py-4 text-xs text-muted-foreground">Asnjë aktivitet ende</div>}
+              {activity.map((a) => {
+                const meta = ACTION_LABELS[a.action] ?? { label: a.action, icon: Activity };
+                const Icon = meta.icon;
+                return (
+                  <div key={a.id} className="flex gap-2.5 border-b border-border/50 py-2 text-xs last:border-0">
+                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className={a.result === "error" ? "text-rose-600" : "text-foreground"}>
+                        {meta.label} {a.ponPort ? `· ${a.ponPort.replace("gpon-onu_", "")}` : ""}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">{new Date(a.createdAt).toLocaleString("sq-AL")}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Right column: OLT status + a slim network-status strip (small, informational) */}
+        <div className="flex flex-col gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <Activity className="h-4 w-4 text-primary" /> Network Status
+                <Server className="h-4 w-4 text-primary" /> OLT
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[140px]">
+              <div className="flex items-center justify-between py-1 text-sm">
+                <div>
+                  <div className="font-medium text-foreground">{currentOlt.name}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {currentOlt.ip} · {currentOlt.location || "–"}
+                  </div>
+                </div>
+                <span className={`h-2 w-2 rounded-full ${currentOlt.status === "online" ? "bg-emerald-500" : "bg-rose-500"}`} />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Activity className="h-4 w-4 text-primary" /> Network Status
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-bold text-foreground">{stats?.online ?? "–"}</span> online
+                </span>
+              </div>
+              <div className="mt-2 h-12">
                 <Sparkline data={history.map((h) => h.on)} />
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <RefreshCw className="h-4 w-4 text-primary" /> Aktiviteti i fundit
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="max-h-[220px] overflow-y-auto">
-                {activity.length === 0 && <div className="py-4 text-xs text-muted-foreground">Asnjë aktivitet ende</div>}
-                {activity.map((a) => {
-                  const meta = ACTION_LABELS[a.action] ?? { label: a.action, icon: Activity };
-                  const Icon = meta.icon;
-                  return (
-                    <div key={a.id} className="flex gap-2.5 border-b border-border/50 py-2 text-xs last:border-0">
-                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className={a.result === "error" ? "text-rose-600" : "text-foreground"}>
-                          {meta.label} {a.ponPort ? `· ${a.ponPort.replace("gpon-onu_", "")}` : ""}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground">{new Date(a.createdAt).toLocaleString("sq-AL")}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
         </div>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-              <Server className="h-4 w-4 text-primary" /> OLT-et
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between py-2 text-sm">
-              <div>
-                <div className="font-medium text-foreground">{currentOlt.name}</div>
-                <div className="text-[11px] text-muted-foreground">
-                  {currentOlt.ip} · {currentOlt.location || "–"}
-                </div>
-              </div>
-              <span className={`h-2 w-2 rounded-full ${currentOlt.status === "online" ? "bg-emerald-500" : "bg-rose-500"}`} />
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
