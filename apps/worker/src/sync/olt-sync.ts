@@ -7,6 +7,8 @@ import {
   scanOltSignals,
   scanOltInventory,
   scanEponInventory,
+  detectOltModel,
+  scanOltRegistrationsC300,
   type InventoryRow,
 } from "@oltflow/adapters";
 import { DEFAULT_PORTS_PER_SLOT, DEFAULT_EPON_PORTS_PER_SLOT } from "@oltflow/core";
@@ -136,6 +138,16 @@ export async function syncOlt(oltId: number): Promise<number> {
         //    an operator interrupts most ticks; the timestamp only advances (and the cursor
         //    clears) once every slot has been scanned in a single uninterrupted pass.
         if (wantDetail) {
+          // Detect the OLT line once (cached on Olt.model). C300 lacks `pon-onu-mng` and rejects
+          // `show gpon onu detail-info` — its ONUs are read from the port running-config instead.
+          // C320 keeps the exact existing path (no behaviour change). Read-only.
+          let model = olt.model;
+          if (!model) {
+            model = await detectOltModel(creds).catch(() => null);
+            if (model) await prisma.olt.update({ where: { id: olt.id }, data: { model } });
+          }
+          const isC300 = model === "C300";
+
           const cursorKey = `sync:det:cursor:${oltId}`;
           let startAt = Number(await kv.get(cursorKey)) || 0;
           if (startAt >= olt.slots.length) startAt = 0; // slot list shrank ⇒ restart from the top
@@ -143,8 +155,13 @@ export async function syncOlt(oltId: number): Promise<number> {
           let detInterrupted = false;
           for (; slot < olt.slots.length; slot++) {
             if (slot > startAt && (await isOltWanted(olt.id))) { detInterrupted = true; break; }
-            const rows = await scanOltInventory(creds, [olt.slots[slot]!], DEFAULT_PORTS_PER_SLOT);
-            await batchUpsertOnus(olt.id, rows.map(toDetailUpsert));
+            if (isC300) {
+              const regs = await scanOltRegistrationsC300(creds, [olt.slots[slot]!], DEFAULT_PORTS_PER_SLOT);
+              await batchUpsertOnus(olt.id, regs.map((r) => ({ ponPort: r.ponPort, fields: { serial: r.serial, type: r.type } })));
+            } else {
+              const rows = await scanOltInventory(creds, [olt.slots[slot]!], DEFAULT_PORTS_PER_SLOT);
+              await batchUpsertOnus(olt.id, rows.map(toDetailUpsert));
+            }
           }
           if (detInterrupted) {
             await kv.set(cursorKey, String(slot)); // resume here next tick
