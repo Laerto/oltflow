@@ -16,6 +16,7 @@ import { loadOlt, toCreds } from "../olt-creds.js";
 import { batchUpsertOnus, reconcileUnconfigured, recordSignal } from "../persist.js";
 import { withOltLock, OltBusyError, isOltWanted } from "../olt-lock.js";
 import { kv } from "../kv.js";
+import { log } from "../logger.js";
 
 // How many working ONUs a single signal batch scans before yielding to a waiting operator.
 const SIGNAL_BATCH = 40;
@@ -148,18 +149,25 @@ export async function syncOlt(oltId: number): Promise<number> {
           if (startAt >= olt.slots.length) startAt = 0; // slot list shrank ⇒ restart from the top
           let slot = startAt;
           let detInterrupted = false;
+          log.info({ oltId, model, isC300, startAt, slots: olt.slots.length }, "detail: start");
           for (; slot < olt.slots.length; slot++) {
             if (slot > startAt && (await isOltWanted(olt.id))) { detInterrupted = true; break; }
+            const t0 = Date.now();
+            let n = 0;
             if (isC300) {
               const regs = await scanOltRegistrationsC300(creds, [olt.slots[slot]!], DEFAULT_PORTS_PER_SLOT);
+              n = regs.length;
               await batchUpsertOnus(olt.id, regs.map((r) => ({ ponPort: r.ponPort, fields: { serial: r.serial, type: r.type } })));
             } else {
               const rows = await scanOltInventory(creds, [olt.slots[slot]!], DEFAULT_PORTS_PER_SLOT);
+              n = rows.length;
               await batchUpsertOnus(olt.id, rows.map(toDetailUpsert));
             }
+            log.info({ oltId, slot: olt.slots[slot], onus: n, ms: Date.now() - t0 }, "detail: slot done");
           }
           if (detInterrupted) {
             await kv.set(cursorKey, String(slot)); // resume here next tick
+            log.info({ oltId, resumeAt: slot }, "detail: interrupted");
             return stateRows.length; // release the lock to the operator
           }
           // Finished every GPON slot this tick → EPON (small, single pass), then mark done.
