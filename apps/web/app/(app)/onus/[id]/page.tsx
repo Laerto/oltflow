@@ -339,8 +339,6 @@ export default function OnuDetailPage() {
                         <MetricRow label="OLT RX" value={onu.oltRx} unit="dBm" style={metricStyle(onu.oltRx, "rx", th)} />
                         <MetricRow label="ONU TX" value={onu.onuTx} unit="dBm" style={metricStyle(onu.onuTx, "tx", th)} />
                         <MetricRow label="OLT TX" value={onu.oltTx} unit="dBm" style={metricStyle(onu.oltTx, "tx", th)} />
-                        <MetricRow label="Att UP" value={onu.attenUp} unit="dB" style={metricStyle(onu.attenUp, "att", th)} />
-                        <MetricRow label="Att DOWN" value={onu.attenDown} unit="dB" style={metricStyle(onu.attenDown, "att", th)} />
                       </div>
                     </>
                   );
@@ -526,9 +524,9 @@ const LEVEL_STYLE: Record<SigLevel, { dot: string; bar: string; text: string }> 
   unknown: { dot: "bg-muted-foreground/40", bar: "bg-muted-foreground/30", text: "text-muted-foreground" },
 };
 const SIGNAL_SUMMARY: Record<SigLevel, { label: string; chip: string; dot: string }> = {
-  good: { label: "I shëndetshëm", chip: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600", dot: "bg-emerald-500" },
-  warning: { label: "Kujdes", chip: "border-amber-500/30 bg-amber-500/10 text-amber-600", dot: "bg-amber-500" },
-  critical: { label: "Kritik", chip: "border-rose-500/30 bg-rose-500/10 text-rose-600", dot: "bg-rose-500" },
+  good: { label: "Mirë", chip: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600", dot: "bg-emerald-500" },
+  warning: { label: "I dobët", chip: "border-amber-500/30 bg-amber-500/10 text-amber-600", dot: "bg-amber-500" },
+  critical: { label: "I keq", chip: "border-rose-500/30 bg-rose-500/10 text-rose-600", dot: "bg-rose-500" },
   unknown: { label: "—", chip: "border-border text-muted-foreground", dot: "bg-muted-foreground/40" },
 };
 const clampPct = (n: number) => Math.max(3, Math.min(100, n));
