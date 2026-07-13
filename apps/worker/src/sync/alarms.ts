@@ -16,6 +16,19 @@ import { notifyNewAlarms, clearNotifyDedup } from "../notify/engine.js";
 // consecutive alarm ticks before we alert, so a briefly-rebooting Mikrotik doesn't cry wolf.
 const CLIENT_OFFLINE_MIN_TICKS = 2;
 
+// Optical-signal alarms (weak/danger) are OFF by default: a chronically weak-but-working link
+// (-28…-30 dBm) is a health metric, not an actionable incident — as a real-time alarm it just
+// floods the NOC and desensitises staff. Signal stays visible (coloured) on the ONU pages. Flip
+// SIGNAL_ALARMS_ENABLED=true to restore per-ONU signal alarms.
+const SIGNAL_ALARMS_ENABLED = process.env.SIGNAL_ALARMS_ENABLED === "true";
+
+// Individual ONU-offline alarms are OFF by default too: for a residential ISP an ONU going down
+// is usually the customer powering it off (the data shows most offline ONUs are "Power Off"/
+// "DyingGasp" and can't even be tied to an account), so per-ONU paging just floods. The actionable
+// "port / mass down" signal is pon.outage (many ONUs on one port dropping together = fibre cut /
+// card fault), which stays on. Flip ONU_OFFLINE_ALARMS_ENABLED=true to restore per-ONU alarms.
+const ONU_OFFLINE_ALARMS_ENABLED = process.env.ONU_OFFLINE_ALARMS_ENABLED === "true";
+
 /**
  * Alarm tick:
  *  1. SQL-side / chunked scans find ONUs/OLTs/ports that cross thresholds.
@@ -148,9 +161,25 @@ export async function checkAlarms(): Promise<number> {
     }
   }
 
+  // RADIUS snapshot (shared by the offline + client-offline sections). Null when RADIUS is
+  // unreachable → we then skip the expired/disabled filtering rather than risk hiding real outages.
+  const radius = await getRadiusData();
+  // An offline ONU whose subscriber account is expired or disabled is EXPECTED to be down
+  // (seasonal/unpaid) — not an incident. Only unexpected outages of active clients should alarm.
+  const isLegitOff = (o: { pppoeUser: string | null; radiusUser: string | null }): boolean => {
+    if (!radius) return false;
+    const user = o.pppoeUser || o.radiusUser;
+    if (!user) return false;
+    const client = radius.byUsername.get(user);
+    if (!client) return false;
+    return Boolean((client.expiration && client.expiration.getTime() < Date.now()) || client.enabled === false);
+  };
+
   // ── 2) Offline ONUs ──────────────────────────────────────────────────────
+  // Generation gated by ONU_OFFLINE_ALARMS_ENABLED (default off). The clear pass below always runs,
+  // so when off any previously-open onu.offline alarms are cleared out on the next tick.
   let cursor = 0;
-  for (;;) {
+  for (; ONU_OFFLINE_ALARMS_ENABLED; ) {
     const rows = await prisma.onu.findMany({
       where: {
         id: { gt: cursor },
@@ -167,16 +196,20 @@ export async function checkAlarms(): Promise<number> {
         mgmtIp: true,
         ponPort: true,
         oltId: true,
+        pppoeUser: true,
+        radiusUser: true,
         olt: { select: { name: true } },
       },
     });
     if (rows.length === 0) break;
     cursor = rows[rows.length - 1]!.id;
 
-    const inputs: OpenAlarmInput[] = rows.map((o) => {
+    const inputs: OpenAlarmInput[] = [];
+    for (const o of rows) {
+      if (isLegitOff(o)) continue; // expired/disabled account → expected down, don't alarm
       const key = `onu.offline:${o.id}`;
       mark("onu.offline", key);
-      return {
+      inputs.push({
         key,
         type: "onu.offline" as const,
         severity: "critical" as const,
@@ -185,8 +218,8 @@ export async function checkAlarms(): Promise<number> {
         title: `${o.name || o.ponPort} — offline`,
         detail: `${o.olt.name} · ${o.state ?? "offline"} · ${whoLabel(o)}`,
         href: `/onus/${o.id}`,
-      };
-    });
+      });
+    }
     notified += await openAndNotify(inputs);
     if (rows.length < CHUNK) break;
   }
@@ -210,7 +243,6 @@ export async function checkAlarms(): Promise<number> {
   // getRadiusData() returns null if RADIUS is unreachable → skip entirely (never false-alarm on a
   // RADIUS outage).
   {
-    const radius = await getRadiusData();
     if (radius) {
       const inputs: OpenAlarmInput[] = [];
       let c = 0;
@@ -277,8 +309,10 @@ export async function checkAlarms(): Promise<number> {
   }
 
   // ── 3) Weak / danger signal ──────────────────────────────────────────────
+  // Generation gated by SIGNAL_ALARMS_ENABLED (default off). The clear pass below always runs, so
+  // when the flag is off any previously-open signal alarms are cleared out on the next tick.
   cursor = 0;
-  for (;;) {
+  for (; SIGNAL_ALARMS_ENABLED; ) {
     const rows = await prisma.onu.findMany({
       where: {
         id: { gt: cursor },
