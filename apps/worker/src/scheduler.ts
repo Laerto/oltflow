@@ -18,6 +18,8 @@ const RADIUS_INTERVAL_MS = Number(process.env.RADIUS_INTERVAL_MS ?? 60_000);
 const PON_TRAFFIC_INTERVAL_MS = Number(process.env.PON_TRAFFIC_INTERVAL_MS ?? 30_000);
 const OLT_HEALTH_INTERVAL_MS = Number(process.env.OLT_HEALTH_INTERVAL_MS ?? 60_000);
 const PRUNE_INTERVAL_MS = Number(process.env.PRUNE_INTERVAL_MS ?? 6 * 60 * 60 * 1000);
+// Fast chassis poll so a backhaul uplink drop is detected in minutes, not the ~15-min detail cycle.
+const SHELF_INTERVAL_MS = Number(process.env.SHELF_INTERVAL_MS ?? 180_000);
 
 /** Spreads enqueue calls across a fraction of the tick interval instead of
  * firing all at once, so e.g. 100 OLTs don't all open sessions in the same
@@ -82,6 +84,15 @@ async function tickAlarms() {
 
 async function tickPonTraffic() {
   await syncPonTraffic();
+}
+
+/** Fast, deduped per-OLT chassis poll (uplink optical DDM) — feeds the olt.uplink.down alarm.
+ * Skips OLTs already known offline (olt.unreachable covers a fully-dead OLT). */
+async function tickShelf() {
+  const olts = await prisma.olt.findMany({ where: { NOT: { status: "offline" } }, select: { id: true } });
+  for (const olt of olts) {
+    await enqueueOltSync(JOB_NAMES.syncShelf, olt.id, jitter(SHELF_INTERVAL_MS));
+  }
 }
 
 async function tickOltHealth() {
@@ -180,6 +191,7 @@ export async function startScheduler() {
   loop(tickRadius, () => RADIUS_INTERVAL_MS, "sync-radius");
   loop(tickAlarms, alarmIntervalMs, "alarms");
   loop(tickPonTraffic, () => PON_TRAFFIC_INTERVAL_MS, "pon-traffic");
+  loop(tickShelf, () => SHELF_INTERVAL_MS, "shelf");
   loop(tickOltHealth, () => OLT_HEALTH_INTERVAL_MS, "olt-health");
   loop(tickPrune, () => PRUNE_INTERVAL_MS, "prune");
   loop(tickHeartbeat, () => HEARTBEAT_INTERVAL_MS, "heartbeat");
@@ -195,6 +207,7 @@ export async function startScheduler() {
       alarmMs,
       radiusMs: RADIUS_INTERVAL_MS,
       ponTrafficMs: PON_TRAFFIC_INTERVAL_MS,
+      shelfMs: SHELF_INTERVAL_MS,
       oltHealthMs: OLT_HEALTH_INTERVAL_MS,
       pruneMs: PRUNE_INTERVAL_MS,
       backupScheduleMs: BACKUP_SCHEDULE_MS,

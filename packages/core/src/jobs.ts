@@ -18,6 +18,7 @@ export const JOB_NAMES = {
   rebootOnu: "reboot-onu",
   rebootOnuCli: "reboot-onu-cli",
   syncOlt: "sync-olt", // combined per-OLT sweep (state + signal + detail), one deduped job/OLT
+  syncShelf: "sync-shelf", // fast chassis poll: card inventory + uplink optical DDM (~2-3min)
   syncInventory: "sync-inventory",
   syncDetail: "sync-detail",
   syncSignals: "sync-signals",

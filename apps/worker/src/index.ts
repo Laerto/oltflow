@@ -6,6 +6,7 @@ import { writeAudit } from "./audit.js";
 import { startScheduler } from "./scheduler.js";
 import { initLogger, log } from "./logger.js";
 import { syncOlt } from "./sync/olt-sync.js";
+import { syncShelf } from "./sync/shelf-sync.js";
 import { handleOltConnectTest } from "./handlers/oltConnectTest.js";
 import { handleScanUnconfigured } from "./handlers/scanUnconfigured.js";
 import { handleRefreshOnu } from "./handlers/refreshOnu.js";
@@ -64,6 +65,7 @@ const HANDLERS: Record<string, Handler> = {
 // so nothing is re-enqueued and the queue never piles up.
 const UNTRACKED_HANDLERS: Record<string, (payload: Record<string, unknown>) => Promise<unknown>> = {
   [JOB_NAMES.syncOlt]: (p) => syncOlt(p.oltId as number),
+  [JOB_NAMES.syncShelf]: (p) => syncShelf(p.oltId as number),
   [JOB_NAMES.acsMirror]: () => syncAcsMirror(),
 };
 
