@@ -12,6 +12,7 @@ export type AlarmType =
   | "onu.signal.danger"
   | "onu.expiry"
   | "olt.unreachable"
+  | "olt.uplink.down"
   | "pon.outage"
   | "client.offline";
 

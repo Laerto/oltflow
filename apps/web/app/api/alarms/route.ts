@@ -12,6 +12,7 @@ import { allowedOltIds } from "@/lib/olt-access";
 // Map stored types → UI kinds the AlarmBell already understands.
 const TYPE_TO_KIND: Record<string, "olt_offline" | "port_outage" | "onu_signal" | "onu_offline" | "onu_expiry"> = {
   "olt.unreachable": "olt_offline",
+  "olt.uplink.down": "olt_offline",
   "pon.outage": "port_outage",
   "onu.signal.danger": "onu_signal",
   "onu.signal.warning": "onu_signal",
@@ -22,7 +23,8 @@ const TYPE_TO_KIND: Record<string, "olt_offline" | "port_outage" | "onu_signal" 
 // Live feed prefers blast-radius + customer-danger first; expiry is lower priority.
 const TYPE_PRIORITY: Record<string, number> = {
   "olt.unreachable": 0,
-  "pon.outage": 1,
+  "olt.uplink.down": 1,
+  "pon.outage": 2,
   "onu.signal.danger": 2,
   "onu.offline": 3,
   "onu.signal.warning": 4,
@@ -79,9 +81,9 @@ export async function GET() {
 
   // Header feed: prefer OLT/port/danger; cap total so the dropdown stays scannable.
   const preferred = sorted.filter((r) =>
-    ["olt.unreachable", "pon.outage", "onu.signal.danger"].includes(r.type)
+    ["olt.unreachable", "olt.uplink.down", "pon.outage", "onu.signal.danger"].includes(r.type)
   );
-  const rest = sorted.filter((r) => !["olt.unreachable", "pon.outage", "onu.signal.danger"].includes(r.type));
+  const rest = sorted.filter((r) => !["olt.unreachable", "olt.uplink.down", "pon.outage", "onu.signal.danger"].includes(r.type));
   const feed = [...preferred, ...rest].slice(0, MAX_ITEMS);
 
   const items = feed.map((r) => ({

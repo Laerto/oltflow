@@ -7,6 +7,7 @@ import {
   type AlarmType,
 } from "@oltflow/db";
 import { onuConnectionKind } from "@oltflow/core";
+import type { ShelfCard } from "@oltflow/adapters";
 import { getRadiusData, normalizeMac } from "../radius.js";
 import { kv } from "../kv.js";
 import { notifyNewAlarms, clearNotifyDedup } from "../notify/engine.js";
@@ -71,6 +72,9 @@ async function openAndNotify(inputs: OpenAlarmInput[]): Promise<number> {
     }
     if (a.type === "olt.unreachable") {
       return { ...a, detail: `🔴 <b>OLT Offline</b>: ${a.title}` };
+    }
+    if (a.type === "olt.uplink.down") {
+      return { ...a, detail: `🔴 <b>Uplink OLT jashtë pune</b> (backhaul) — ${a.title}: ${a.detail ?? ""}` };
     }
     if (a.type === "pon.outage") {
       return { ...a, detail: `🟠 <b>PON outage</b>: ${a.title}` };
@@ -460,6 +464,63 @@ export async function checkAlarms(): Promise<number> {
     const still = activeKeys.get("pon.outage") ?? new Set();
     for (const a of before) {
       if (!still.has(a.key)) await clearNotifyDedup(a.key);
+    }
+  }
+
+  // ── OLT uplink out of service (backhaul down) ────────────────────────────────
+  // The GE/10GE uplink is the OLT's path to the core: if it drops, every client behind the
+  // OLT loses internet even while the OLT itself may still answer management (so olt.unreachable
+  // stays silent). Read from the periodic shelf snapshot (Olt.shelf). To avoid crying wolf over
+  // spare SFPs left plugged in, only uplinks SEEN UP at least once are monitored (learned in
+  // Redis with a TTL) — a port that was never up never alarms. A once-up uplink that drops stays
+  // alarmed until it recovers (or the learn key expires after ~14 days of being down).
+  {
+    const UPLINK_SEEN_TTL = 14 * 86_400; // seconds a once-up uplink stays "monitored"
+    const olts = await prisma.olt.findMany({ select: { id: true, name: true, status: true, shelf: true } });
+    const inputs: OpenAlarmInput[] = [];
+    for (const olt of olts) {
+      if (olt.status === "offline") continue; // a fully-dead OLT is covered by olt.unreachable
+      const snap = olt.shelf as { cards?: ShelfCard[] } | null;
+      if (!snap?.cards) continue;
+      for (const card of snap.cards) {
+        if (card.role !== "uplink-xge" && card.role !== "uplink-ge") continue;
+        for (const u of card.uplinks ?? []) {
+          if (!u.present) continue; // empty cage — nothing to monitor
+          const seenKey = `uplink:seen:${olt.id}:${u.name}`;
+          // Healthy = link up and Rx above the module's own lower alarm threshold (LOS floor).
+          const healthy = u.up !== false && (u.rxPower == null || u.rxLower == null || u.rxPower > u.rxLower);
+          if (healthy) {
+            await kv.set(seenKey, String(now)).catch(() => {});
+            await kv.expire(seenKey, UPLINK_SEEN_TTL).catch(() => {});
+            continue;
+          }
+          const wasActive = Boolean(await kv.get(seenKey).catch(() => null));
+          if (!wasActive) continue; // never seen up ⇒ spare/unused SFP, do not alarm
+          const key = `olt.uplink.down:${olt.id}:${u.name}`;
+          mark("olt.uplink.down", key);
+          const rx = u.rxPower == null ? "—" : `${u.rxPower} dbm`;
+          const band = card.role === "uplink-xge" ? "10GE" : "GE";
+          inputs.push({
+            key,
+            type: "olt.uplink.down",
+            severity: "critical",
+            oltId: olt.id,
+            title: `${olt.name} · uplink ${u.name} (${band}) — jashtë pune`,
+            detail: `${u.moduleType ?? "modul"} · Rx ${rx}${u.rxLower != null ? ` (prag ${u.rxLower})` : ""} · link ${u.up === false ? "DOWN" : "up"}`,
+            href: `/olts/${olt.id}`,
+            detailJson: { name: u.name, rxPower: u.rxPower, up: u.up, rxLower: u.rxLower },
+          });
+        }
+      }
+    }
+    notified += await openAndNotify(inputs);
+    {
+      const before = await prisma.alarm.findMany({ where: { type: "olt.uplink.down", clearedAt: null }, select: { key: true } });
+      await clearAlarmsExcept("olt.uplink.down", activeKeys.get("olt.uplink.down") ?? new Set());
+      const still = activeKeys.get("olt.uplink.down") ?? new Set();
+      for (const a of before) {
+        if (!still.has(a.key)) await clearNotifyDedup(a.key);
+      }
     }
   }
 
