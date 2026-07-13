@@ -95,21 +95,33 @@ function CardRow({ card }: { card: ShelfCard }) {
   );
 }
 
-// GPON/EPON access board — per-port ONU counts, linked to the filtered ONU list.
+// Per-port colour: green = all online, amber = partially, rose = all down, muted = empty.
+function ponPortClass(total: number, online: number): string {
+  if (total === 0) return "border-border bg-muted/30 text-muted-foreground";
+  if (online === total) return "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
+  if (online === 0) return "border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300";
+  return "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300";
+}
+
+// GPON/EPON access board — per-port ONU counts (big number), linked to the filtered ONU list.
 function PonBody({ card }: { card: ShelfCard }) {
-  const n = card.ports && card.ports > 0 ? card.ports : card.role === "epon" ? 8 : 16;
+  const ports =
+    card.portOnus ??
+    Array.from({ length: card.ports && card.ports > 0 ? card.ports : card.role === "epon" ? 8 : 16 }, (_, i) => ({ port: i + 1, total: 0, online: 0 }));
   return (
     <div className="grid grid-cols-4 gap-1.5 p-2.5 sm:grid-cols-8">
-      {Array.from({ length: n }, (_, i) => i + 1).map((port) => {
-        const q = encodeURIComponent(`${card.slot}/${port}:`);
+      {ports.map((p) => {
+        const q = encodeURIComponent(`${card.slot}/${p.port}:`);
+        const tile = (
+          <div className={`flex h-11 flex-col items-center justify-center rounded-md border text-center transition ${ponPortClass(p.total, p.online)} ${p.total ? "hover:brightness-95" : ""}`}>
+            <span className="text-[9px] font-medium opacity-70">P{p.port}</span>
+            <span className="text-sm font-bold leading-none">{p.total || "–"}</span>
+          </div>
+        );
+        if (!p.total) return <div key={p.port} title={`Porta ${card.slot}/${p.port} · bosh`}>{tile}</div>;
         return (
-          <Link
-            key={port}
-            href={`/onus?q=${q}`}
-            title={`Porta ${card.slot}/${port}`}
-            className="flex h-10 flex-col items-center justify-center rounded-md border border-border bg-muted/30 text-center transition hover:border-primary/50 hover:bg-primary/5"
-          >
-            <span className="text-[9px] font-medium text-muted-foreground">P{port}</span>
+          <Link key={p.port} href={`/onus?q=${q}`} title={`Porta ${card.slot}/${p.port} · ${p.total} ONU · ${p.online} online`}>
+            {tile}
           </Link>
         );
       })}

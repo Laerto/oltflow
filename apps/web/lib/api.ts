@@ -588,6 +588,7 @@ export interface ShelfCard {
   status: string;
   ports: number | null;
   onus?: { total: number; online: number };
+  portOnus?: { port: number; total: number; online: number }[];
   uplinks?: UplinkPort[];
 }
 
