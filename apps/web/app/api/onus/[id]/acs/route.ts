@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@oltflow/db";
 import { JOB_NAMES } from "@oltflow/core";
-import { getLanPorts } from "@oltflow/adapters";
+import { getLanPorts, getWifiClients } from "@oltflow/adapters";
 import { requireUser } from "@/lib/auth";
 import { guardOnuAccess } from "@/lib/olt-access";
 import { requirePerm } from "@/lib/authorize";
@@ -29,15 +29,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   // Live per-port LAN status (LAN1..LAN4) — best-effort; the mirror doesn't store it and the
   // link state changes often, so read it fresh from NBI. Skipped for pending/unlinked devices.
-  const lanPorts =
+  const live =
     acs && GENIEACS_URL && !acs.deviceId.startsWith("pending:")
-      ? await getLanPorts(GENIEACS_URL, acs.deviceId).catch(() => [])
-      : [];
+      ? await Promise.all([
+          getLanPorts(GENIEACS_URL, acs.deviceId).catch(() => []),
+          getWifiClients(GENIEACS_URL, acs.deviceId).catch(() => []),
+        ])
+      : [[], []];
+  const [lanPorts, wifiClients] = live;
 
   return NextResponse.json({
     acs: acs
       ? {
           lanPorts,
+          wifiClients,
           deviceId: acs.deviceId,
           serial: acs.serial,
           productClass: acs.productClass,

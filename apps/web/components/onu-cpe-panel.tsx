@@ -22,6 +22,14 @@ interface LanPort {
   name: string | null;
 }
 
+interface WifiClient {
+  mac: string;
+  name: string | null;
+  band: "2.4G" | "5G";
+  rxRate: number | null;
+  snr: number | null;
+}
+
 export interface AcsMirror {
   deviceId: string;
   serial: string | null;
@@ -38,6 +46,7 @@ export interface AcsMirror {
   wifiEnabled5g: boolean | null;
   lanHosts: LanHost[] | null;
   lanPorts: LanPort[] | null;
+  wifiClients: WifiClient[] | null;
   lastInform: string | null;
   mirroredAt: string;
   expectedBy: string | null;
@@ -142,6 +151,7 @@ export function OnuCpePanel({
 
   const hosts = (Array.isArray(acs.lanHosts) ? acs.lanHosts : []) as LanHost[];
   const ports = (Array.isArray(acs.lanPorts) ? acs.lanPorts : []) as LanPort[];
+  const wifiClients = (Array.isArray(acs.wifiClients) ? acs.wifiClients : []) as WifiClient[];
 
   return (
     <div className="space-y-3">
@@ -196,6 +206,39 @@ export function OnuCpePanel({
         initialSsid5g={acs.ssid5g ?? undefined}
         onDone={load}
       />
+
+      {wifiClients.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="flex items-center gap-1.5 border-b border-border px-4 py-2.5 text-sm font-semibold">
+            <Wifi className="h-4 w-4" /> Klientë WiFi të lidhur ({wifiClients.length})
+          </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-muted text-[11px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2 font-semibold">Pajisja</th>
+                <th className="px-4 py-2 font-semibold">MAC</th>
+                <th className="px-4 py-2 font-semibold">Band</th>
+                <th className="px-4 py-2 font-semibold">Sinjal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {wifiClients.map((w, i) => (
+                <tr key={i} className="border-t border-border/60 hover:bg-muted/30">
+                  <td className="px-4 py-2 font-medium">{w.name || "—"}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{w.mac}</td>
+                  <td className="px-4 py-2">
+                    <Badge variant="outline" className={w.band === "5G" ? "border-violet-500/40 text-violet-600" : "border-blue-500/40 text-blue-600"}>{w.band}</Badge>
+                  </td>
+                  <td className="px-4 py-2 font-mono text-xs">
+                    {w.snr != null ? `${w.snr} dB` : "—"}
+                    {w.rxRate != null && <span className="text-muted-foreground"> · {Math.round(w.rxRate / 1000)}M</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
 
       <Card className="overflow-hidden">
         {ports.length > 0 && (

@@ -204,6 +204,53 @@ export async function getWifiInfo(genieacsUrl: string, serial: string): Promise<
   return result;
 }
 
+export interface WifiClient {
+  mac: string;
+  name: string | null;
+  band: "2.4G" | "5G";
+  rxRate: number | null; // kbps
+  snr: number | null; // dB
+}
+
+/** Live wireless clients associated to the CPE's WiFi (WLANConfiguration.{i}.AssociatedDevice) —
+ * so support sees exactly what's connected over WiFi instead of guessing. Instances 1-4 = 2.4G,
+ * 5-8 = 5G on ZTE. Best-effort; [] if the tree is absent. */
+export async function getWifiClients(genieacsUrl: string, deviceId: string): Promise<WifiClient[]> {
+  const res = await fetch(
+    devicesUrl(genieacsUrl, {
+      query: { _id: deviceId },
+      projection: "InternetGatewayDevice.LANDevice.1.WLANConfiguration",
+    })
+  ).catch(() => null);
+  if (!res || !res.ok) return [];
+  const devices = (await res.json()) as GenieDevice[];
+  const wlan = deepGet(devices[0], "InternetGatewayDevice", "LANDevice", "1", "WLANConfiguration") as
+    | Record<string, unknown>
+    | undefined;
+  if (!wlan) return [];
+  const numOrNull = (x: unknown): number | null => (x == null || x === "" || Number.isNaN(Number(x)) ? null : Number(x));
+  const clients: WifiClient[] = [];
+  for (const [idx, wv] of Object.entries(wlan)) {
+    if (!/^\d+$/.test(idx)) continue;
+    const band: "2.4G" | "5G" = Number(idx) >= 5 ? "5G" : "2.4G";
+    const assoc = deepGet(wv, "AssociatedDevice") as Record<string, unknown> | undefined;
+    if (!assoc) continue;
+    for (const [aidx, av] of Object.entries(assoc)) {
+      if (!/^\d+$/.test(aidx)) continue;
+      const mac = (deepGet(av, "X_ZTE-COM_MACAddress", "_value") ?? deepGet(av, "AssociatedDeviceMACAddress", "_value")) as string | undefined;
+      if (!mac || !/[0-9a-f]{2}:/i.test(String(mac))) continue;
+      clients.push({
+        mac: String(mac),
+        name: (deepGet(av, "X_ZTE-COM_AssociatedDeviceName", "_value") as string) || null,
+        band,
+        rxRate: numOrNull(deepGet(av, "X_ZTE-COM_RXRate", "_value")),
+        snr: numOrNull(deepGet(av, "X_ZTE-COM_WLAN_SNR", "_value")),
+      });
+    }
+  }
+  return clients;
+}
+
 export interface LanPort {
   /** 1-based physical port index → LAN1..LAN4. */
   port: number;
