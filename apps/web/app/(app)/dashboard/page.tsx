@@ -248,8 +248,9 @@ export default function DashboardPage() {
 
             <div className="border-t border-border/60" />
 
-            {/* OLT health (CPU / temp / cards) — embedded section, no second frame */}
-            <OltHealthCard oltId={currentOlt.id} bare />
+            {/* OLT health summary (CPU / temp / active cards) — the per-board breakdown lives on
+                the OLT detail page, it's too granular for the office dashboard. */}
+            <OltHealthCard oltId={currentOlt.id} bare showCards={false} />
           </CardContent>
         </Card>
 

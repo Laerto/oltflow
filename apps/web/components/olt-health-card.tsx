@@ -105,8 +105,18 @@ function KpiTile({
 /** Professional OLT-health panel: fleet-card CPU% and temperature polled over SNMP. Replaces
  * the bulky per-PON bandwidth chart on the dashboard (that moved to the OLT detail page).
  * `bare` drops the outer Card so this can be embedded as a section inside another card
- * (dashboard merges it under the signal-distribution block with a thin divider). */
-export function OltHealthCard({ oltId, bare = false }: { oltId: number; bare?: boolean }) {
+ * (dashboard merges it under the signal-distribution block with a thin divider). `showCards`
+ * toggles the per-slot CPU/temp meter list — the dashboard shows only the summary KPIs (that
+ * granular per-board breakdown is specialist detail that lives on the OLT detail page). */
+export function OltHealthCard({
+  oltId,
+  bare = false,
+  showCards = true,
+}: {
+  oltId: number;
+  bare?: boolean;
+  showCards?: boolean;
+}) {
   const [data, setData] = useState<Health | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
 
@@ -194,7 +204,9 @@ export function OltHealthCard({ oltId, bare = false }: { oltId: number; bare?: b
               </div>
             </div>
 
-            {/* Per-card meters — magnitude bars, values labelled, temp chip with icon */}
+            {/* Per-card meters — magnitude bars, values labelled, temp chip with icon.
+                Specialist detail: hidden on the dashboard summary, shown on the OLT page. */}
+            {showCards && (
             <div className="mt-3 max-h-[168px] space-y-1 overflow-y-auto pr-1">
               {cards.map((c) => {
                 const ct = cpuTone(c.cpu);
@@ -219,6 +231,7 @@ export function OltHealthCard({ oltId, bare = false }: { oltId: number; bare?: b
                 );
               })}
             </div>
+            )}
           </>
         )}
     </>

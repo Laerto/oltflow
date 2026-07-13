@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OltShelf } from "@/components/olt-shelf";
+import { OltHealthCard } from "@/components/olt-health-card";
 import { useOlts } from "../../providers";
 
 // Keep recharts out of the initial per-OLT bundle — the PON chart streams its own chunk.
@@ -64,6 +65,10 @@ export default function OltDetailPage({ params }: { params: Promise<{ id: string
 
       <div className="mb-5">
         <PonTrafficCard oltId={olt.id} />
+      </div>
+
+      <div className="mb-5">
+        <OltHealthCard oltId={olt.id} />
       </div>
 
       <div className="mb-5">
