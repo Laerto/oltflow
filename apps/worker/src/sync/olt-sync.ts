@@ -102,21 +102,17 @@ export async function syncOlt(oltId: number): Promise<number> {
         );
         await reconcileUnconfigured(olt.id, [...uncfg, ...eponUncfg]);
 
-        // Cooperative preemption: if an operator command is blocked waiting for this OLT,
-        // release the lock now (after the cheap state pass) and let them in — the expensive
-        // signal/detail passes run on the next quiet tick instead of making the click time
-        // out behind a multi-hundred-ONU sweep on a big OLT (KSAMIL/BORSH). Timestamps are
-        // NOT advanced, so the skipped passes are still due next tick.
-        if ((wantSignal || wantDetail) && (await isOltWanted(olt.id))) {
-          return stateRows.length;
-        }
+        // Cooperative preemption: if an operator command is blocked waiting for this OLT, DEFER the
+        // (medium) signal pass so the click gets in fast — but still run detail below, which yields
+        // per-slot. Deferring detail entirely here starved it on a perpetually-busy OLT (KSAMIL was
+        // never getting its C300 registration read); the per-slot loop already bounds the operator's
+        // wait to a single slot, so detail always makes ≥1 slot of progress per tick.
+        const operatorWaiting = await isOltWanted(olt.id);
 
-        // 2) Signal (when due; medium) — scanned in batches so an operator command waiting on
-        //    this OLT preempts between batches (worst-case wait ≈ one 40-ONU batch, not the whole
-        //    working set). We check only after the first batch so every tick makes progress; on
-        //    interruption the timestamp is NOT advanced, so signal re-runs next tick, and we
-        //    release the lock immediately to the operator.
-        if (wantSignal) {
+        // 2) Signal (when due; medium) — scanned in batches so an operator waiting on this OLT
+        //    preempts between batches. Skipped when an operator is already waiting; on interruption
+        //    the timestamp is NOT advanced, so it re-runs next tick.
+        if (wantSignal && !operatorWaiting) {
           const working = await prisma.onu.findMany({ where: { oltId: olt.id, state: "working" }, select: { id: true, ponPort: true } });
           let sigInterrupted = false;
           for (let i = 0; i < working.length; i += SIGNAL_BATCH) {
@@ -128,8 +124,7 @@ export async function syncOlt(oltId: number): Promise<number> {
               if (s) await recordSignal(onu.id, s);
             }
           }
-          if (sigInterrupted) return stateRows.length;
-          await kv.set(`sync:sig:${oltId}`, String(Date.now()));
+          if (!sigInterrupted) await kv.set(`sync:sig:${oltId}`, String(Date.now()));
         }
 
         // 3) Detail (when due; slow) — scanned per-slot with a resume cursor so an operator
