@@ -44,6 +44,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     serviceProfile: onu.serviceProfile,
     mac: onu.mac,
     mgmtIp: bridge ? onu.mgmtIp : null,
+    radiusUser: onu.radiusUser,
+    pppoeOnline: onu.pppoeOnline,
     expiration: onu.expiration ? onu.expiration.toISOString() : null,
     customer: null,
     lastSeen: onu.lastSeen,

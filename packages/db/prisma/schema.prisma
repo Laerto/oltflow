@@ -117,6 +117,8 @@ model Onu {
   serviceProfile String?
   mac            String? // MAC learned on the bridge port (the downstream Mikrotik) — RADIUS join key
   mgmtIp         String? // live device IP (route ONU / bridge Mikrotik), filled from RADIUS by the worker
+  radiusUser     String? // last-seen RADIUS/PPPoE username (sticky) — lets us resolve a bridge client's account (expiry/enabled) even when its session is down, and show who's connected
+  pppoeOnline    Boolean? // is the subscriber's PPPoE/RADIUS session active right now (non-sticky, worker-set); null = unknown. Drives the client.offline alarm + ONU badge
   expiration     DateTime? // client account expiry from RADIUS Manager (rm_users), filled by the worker
   latitude       Float? // customer/ONU geolocation for the network map (set at install or manually)
   longitude      Float?

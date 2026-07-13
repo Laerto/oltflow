@@ -219,7 +219,7 @@ export async function checkAlarms(): Promise<number> {
           },
           orderBy: { id: "asc" },
           take: CHUNK,
-          select: { id: true, name: true, serial: true, ponPort: true, oltId: true, type: true, mac: true, mgmtIp: true, pppoeUser: true, olt: { select: { name: true } } },
+          select: { id: true, name: true, serial: true, ponPort: true, oltId: true, type: true, mac: true, mgmtIp: true, pppoeUser: true, radiusUser: true, olt: { select: { name: true } } },
         });
         if (rows.length === 0) break;
         c = rows[rows.length - 1]!.id;
@@ -227,12 +227,20 @@ export async function checkAlarms(): Promise<number> {
           const kind = onuConnectionKind(o.type);
           const macKey = o.mac ? normalizeMac(o.mac) : "";
           const session = macKey ? radius.byMac.get(macKey) : undefined;
-          const user = o.pppoeUser || session?.username || null;
+          // Resolve the subscriber: active session first, else the sticky remembered username (so a
+          // DOWN bridge session — which loses the MAC→user link — still resolves to its account).
+          const user = o.pppoeUser || session?.username || o.radiusUser || null;
           const client = user ? radius.byUsername.get(user) : undefined;
           const hasSession = kind === "bridge" ? Boolean(session?.liveIp) : Boolean(client?.liveIp || session?.liveIp);
-          // Expected to carry a session: route with a pppoeUser, or a bridge ONU we've seen up before
-          // (sticky mgmtIp) with a learned downstream MAC.
-          const expected = kind === "route" ? Boolean(o.pppoeUser) : Boolean(o.mgmtIp && o.mac);
+          // Skip accounts that are LEGITIMATELY off — expired or disabled in RADIUS — so we don't
+          // cry wolf over seasonal/unpaid clients (only unexpected outages of active clients alarm).
+          const legitOff = Boolean(client && ((client.expiration && client.expiration.getTime() < Date.now()) || client.enabled === false));
+          // Expected to carry a session: route with a pppoeUser, or a bridge ONU seen up before
+          // (sticky mgmtIp + learned MAC). Must know the account and it must be active.
+          const expected =
+            Boolean(user) &&
+            !legitOff &&
+            (kind === "route" ? Boolean(o.pppoeUser) : Boolean(o.mgmtIp && o.mac));
           const cntKey = `client-off-cnt:${o.id}`;
           if (expected && !hasSession) {
             // Confirm the outage across consecutive ticks before alarming (flap damping).

@@ -10,6 +10,7 @@ export interface RadiusClient {
   staticIp: string | null;
   liveIp: string | null;
   fullName: string | null;
+  enabled: boolean;
 }
 export interface RadiusData {
   byUsername: Map<string, RadiusClient>;
@@ -83,7 +84,7 @@ export async function getRadiusData(): Promise<RadiusData | null> {
     const byUsername = new Map<string, RadiusClient>();
     const byMac = new Map<string, { liveIp: string; username: string | null }>();
 
-    for (const r of await q(p, "SELECT username, expiration, staticipcpe, firstname, lastname, company FROM rm_users")) {
+    for (const r of await q(p, "SELECT username, expiration, staticipcpe, firstname, lastname, company, enableuser FROM rm_users")) {
       const username = String(r.username ?? "");
       if (!username) continue;
       const staticIp = String(r.staticipcpe ?? "").trim();
@@ -93,6 +94,7 @@ export async function getRadiusData(): Promise<RadiusData | null> {
         staticIp: staticIp && staticIp !== "0.0.0.0" ? staticIp : null,
         liveIp: null,
         fullName: name || null,
+        enabled: Number(r.enableuser ?? 1) === 1,
       });
     }
 

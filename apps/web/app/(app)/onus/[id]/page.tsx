@@ -56,7 +56,13 @@ const OnuLivePanel = dynamic(
 );
 
 type SignalThresholds = { good: number; warning: number; danger: number };
-type OnuDetail = OnuRow & { oltId: number; oltName: string; signalThresholds?: SignalThresholds };
+type OnuDetail = OnuRow & {
+  oltId: number;
+  oltName: string;
+  signalThresholds?: SignalThresholds;
+  radiusUser?: string | null;
+  pppoeOnline?: boolean | null;
+};
 
 interface LiveExtras {
   history?: { authTime: string; offlineTime: string; cause: string }[];
@@ -295,6 +301,9 @@ export default function OnuDetailPage() {
                 <ClipboardList className="h-4 w-4 text-muted-foreground" />
                 <span className="text-base font-bold leading-tight">{onu.name || onu.ponPort}</span>
                 <Badge variant={stateBadgeColor(onu.state)}>● {onu.state === "working" ? "Online" : "Offline"}</Badge>
+                {onu.state === "working" && onu.pppoeOnline === false && (
+                  <Badge variant="destructive" title="ONU online, por sesioni PPPoE i klientit është i rënë (Mikrotik/router i fikur)">⚠ Klient OFFLINE (PPPoE)</Badge>
+                )}
                 {epon && <Badge variant="secondary">EPON</Badge>}
                 {connectionKind === "bridge" && <Badge variant="secondary">Bridge</Badge>}
                 {connectionKind === "route" && <Badge variant="secondary">Route</Badge>}
@@ -394,12 +403,27 @@ export default function OnuDetailPage() {
               />
               <InfoRow label="WAN Mode" value={onu.pppoeUser ? "PPPoE" : connectionKind === "bridge" ? "Bridge (Mikrotik → PPPoE)" : "Profile (OMCI)"} />
               {connectionKind === "bridge" ? (
-                <InfoRow label="Mikrotik MAC" value={onu.mac ? <span className="font-mono text-xs text-blue-600">{onu.mac}</span> : <span className="text-muted-foreground">–</span>} />
+                <>
+                  <InfoRow label="PPPoE User" value={onu.radiusUser ? <span className="font-mono text-blue-600">{onu.radiusUser}</span> : <span className="text-muted-foreground">–</span>} />
+                  <InfoRow label="Mikrotik MAC" value={onu.mac ? <span className="font-mono text-xs">{onu.mac}</span> : <span className="text-muted-foreground">–</span>} />
+                </>
               ) : (
                 <>
                   <InfoRow label="PPPoE User" value={onu.pppoeUser ? <span className="font-mono text-blue-600">{onu.pppoeUser}</span> : "–"} />
                   <InfoRow label="PPPoE Pass" value={live?.pppoePass ? <span className="font-mono">{live.pppoePass}</span> : <span className="text-muted-foreground">rifresko për ta parë</span>} />
                 </>
+              )}
+              {onu.pppoeOnline != null && (
+                <InfoRow
+                  label="Sesioni PPPoE"
+                  value={
+                    onu.pppoeOnline ? (
+                      <span className="inline-flex items-center gap-1.5 text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Aktiv</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-rose-600"><span className="h-2 w-2 rounded-full bg-rose-500" /> I rënë</span>
+                    )
+                  }
+                />
               )}
             </div>
           </SectionCard>
