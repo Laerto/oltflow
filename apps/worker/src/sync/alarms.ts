@@ -8,7 +8,12 @@ import {
 } from "@oltflow/db";
 import { onuConnectionKind } from "@oltflow/core";
 import { getRadiusData, normalizeMac } from "../radius.js";
+import { kv } from "../kv.js";
 import { notifyNewAlarms, clearNotifyDedup } from "../notify/engine.js";
+
+// Flap damping for client.offline: a subscriber's PPPoE session must be missing for this many
+// consecutive alarm ticks before we alert, so a briefly-rebooting Mikrotik doesn't cry wolf.
+const CLIENT_OFFLINE_MIN_TICKS = 2;
 
 /**
  * Alarm tick:
@@ -228,19 +233,28 @@ export async function checkAlarms(): Promise<number> {
           // Expected to carry a session: route with a pppoeUser, or a bridge ONU we've seen up before
           // (sticky mgmtIp) with a learned downstream MAC.
           const expected = kind === "route" ? Boolean(o.pppoeUser) : Boolean(o.mgmtIp && o.mac);
+          const cntKey = `client-off-cnt:${o.id}`;
           if (expected && !hasSession) {
-            const key = `client.offline:${o.id}`;
-            mark("client.offline", key);
-            inputs.push({
-              key,
-              type: "client.offline" as const,
-              severity: "critical" as const,
-              oltId: o.oltId,
-              onuId: o.id,
-              title: `${o.name || o.ponPort} — klient offline`,
-              detail: `${o.olt.name} · ONU online por PPPoE i rënë${o.mgmtIp ? ` · ${o.mgmtIp}` : ""}${user ? ` · ${user}` : ""}`,
-              href: `/onus/${o.id}`,
-            });
+            // Confirm the outage across consecutive ticks before alarming (flap damping).
+            const cnt = await kv.incr(cntKey).catch(() => CLIENT_OFFLINE_MIN_TICKS);
+            await kv.expire(cntKey, 900).catch(() => {});
+            if (cnt >= CLIENT_OFFLINE_MIN_TICKS) {
+              const key = `client.offline:${o.id}`;
+              mark("client.offline", key);
+              inputs.push({
+                key,
+                type: "client.offline" as const,
+                severity: "critical" as const,
+                oltId: o.oltId,
+                onuId: o.id,
+                title: `${o.name || o.ponPort} — klient offline`,
+                detail: `${o.olt.name} · ONU online por PPPoE i rënë${o.mgmtIp ? ` · ${o.mgmtIp}` : ""}${user ? ` · ${user}` : ""}`,
+                href: `/onus/${o.id}`,
+              });
+            }
+          } else if (hasSession) {
+            // Recovered (or never down) → reset the streak so a future blip needs the full count.
+            await kv.del(cntKey).catch(() => {});
           }
         }
         if (rows.length < CHUNK) break;
