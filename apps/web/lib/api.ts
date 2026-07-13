@@ -49,6 +49,7 @@ export const api = {
     request<{ ok: boolean }>(`/api/olts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   deleteOlt: (id: number) => request<{ ok: boolean }>(`/api/olts/${id}`, { method: "DELETE" }),
   oltPorts: (oltId: number) => request<{ name: string; cards: OltCard[] }>(`/api/olts/${oltId}/ports`),
+  oltShelf: (oltId: number) => request<{ name: string; at: string | null; cards: ShelfCard[] }>(`/api/olts/${oltId}/shelf`),
   stats: (oltId: number) =>
     request<{
       total: number;
@@ -559,6 +560,35 @@ export interface OltCard {
   kind: "gpon" | "epon";
   card: string;
   ports: OltPort[];
+}
+
+export type CardRole = "power" | "control" | "gpon" | "epon" | "uplink-xge" | "uplink-ge" | "other";
+export interface UplinkPort {
+  port: number;
+  name: string;
+  present: boolean;
+  up: boolean | null;
+  moduleType?: string;
+  vendor?: string;
+  rxPower: number | null;
+  txPower: number | null;
+  temp: number | null;
+  vol: number | null;
+  bias: number | null;
+  rxLower: number | null;
+  rxUpper: number | null;
+  txLower: number | null;
+  txUpper: number | null;
+}
+export interface ShelfCard {
+  slot: number;
+  cfgType: string;
+  realType: string;
+  role: CardRole;
+  status: string;
+  ports: number | null;
+  onus?: { total: number; online: number };
+  uplinks?: UplinkPort[];
 }
 
 export interface OnuRow {

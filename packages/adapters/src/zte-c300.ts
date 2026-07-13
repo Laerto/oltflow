@@ -378,6 +378,153 @@ export async function scanOltRegistrationsC300(
   }
 }
 
+// ── Chassis / shelf view ────────────────────────────────────────────────────
+// NetNumen-style shelf: `show card` lists every board (power / control / GPON /
+// EPON access / GE+10GE uplink) with its slot, type and INSERVICE/STANDBY status.
+// Uplink boards additionally expose per-port optical DDM (Rx/Tx power, temp,
+// voltage) via `show interface optical-module <iface>_1/<slot>/<port>`. All reads
+// are read-only `show` commands; identical output on C300 and C320.
+
+export type CardRole = "power" | "control" | "gpon" | "epon" | "uplink-xge" | "uplink-ge" | "other";
+
+export interface UplinkPort {
+  port: number;
+  name: string; // e.g. xgei_1/19/1
+  present: boolean; // an optical module is plugged in (Module-Type != N/A)
+  up: boolean | null; // link state (only read for present modules)
+  moduleType?: string; // 10GBASE-SR, 1000BASE-LX, …
+  vendor?: string;
+  rxPower: number | null;
+  txPower: number | null;
+  temp: number | null;
+  vol: number | null;
+  bias: number | null;
+  rxLower: number | null;
+  rxUpper: number | null;
+  txLower: number | null;
+  txUpper: number | null;
+}
+
+export interface ShelfCard {
+  rack: number;
+  shelf: number;
+  slot: number;
+  cfgType: string;
+  realType: string;
+  role: CardRole;
+  ports: number | null;
+  status: string; // INSERVICE | STANDBY | OFFLINE | …
+  uplinks?: UplinkPort[];
+}
+
+/** Classify a board from its ZTE type code (SCXN/GTGH/HUVQ/…). Uplink cards drive
+ * the optical read and the iface name: HU/XU prefix = 10GE (xgei), GU = GE (gei). */
+export function cardRole(type: string): CardRole {
+  const t = type.toUpperCase();
+  if (t.startsWith("PRW")) return "power";
+  if (t.startsWith("SC") || t.startsWith("SM") || t.startsWith("SX")) return "control";
+  if (t.startsWith("GTG")) return "gpon";
+  if (t.startsWith("ETT")) return "epon";
+  if (t.startsWith("HU") || t.startsWith("XU")) return "uplink-xge";
+  if (t.startsWith("GU")) return "uplink-ge";
+  return "other";
+}
+
+function uplinkIface(role: CardRole): "xgei" | "gei" | null {
+  if (role === "uplink-xge") return "xgei";
+  if (role === "uplink-ge") return "gei";
+  return null;
+}
+
+const numOrNull = (v: string | undefined): number | null => {
+  if (!v || /N\/A/i.test(v)) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Parse one `show interface optical-module …` reply. Values may be glued to their
+ * unit (`-2.391(dbm)`, `3.312(v)`, `-34(dbm)`), so the numeric capture stops at the
+ * number and ignores the trailing unit. */
+function parseOpticalModule(out: string): Omit<UplinkPort, "port" | "name" | "up"> {
+  const g = (re: RegExp): string | undefined => re.exec(out)?.[1]?.trim();
+  // Numeric field: capture just the signed decimal (or N/A), never the glued unit.
+  const gn = (label: string): number | null =>
+    numOrNull(new RegExp(`${label}\\s*:\\s*(-?\\d+(?:\\.\\d+)?|N/A)`, "i").exec(out)?.[1]);
+  const moduleType = g(/Module-Type\s*:\s*(\S[^\r\n]*?)\s*(?:\r?\n|$)/);
+  const present = !!moduleType && !/N\/A/i.test(moduleType);
+  return {
+    present,
+    moduleType: present ? moduleType : undefined,
+    vendor: g(/Vendor-Name\s*:\s*(\S[^\r\n]*?)\s{2,}/) || undefined,
+    rxPower: gn("RxPower"),
+    txPower: gn("TxPower"),
+    temp: gn("Temperature"),
+    vol: gn("Supply-Vol"),
+    bias: gn("TxBias-Current"),
+    rxLower: gn("RxPower-Lower"),
+    rxUpper: gn("RxPower-Upper"),
+    txLower: gn("TxPower-Lower"),
+    txUpper: gn("TxPower-Upper"),
+  };
+}
+
+/** Read the board inventory (`show card`) → one row per installed slot. Read-only. */
+export async function scanCardInventory(creds: OltCreds): Promise<ShelfCard[]> {
+  const session = await login(creds);
+  try {
+    await session.sendCommand("terminal length 0", 500);
+    const out = await readReply(session, "show card", 4000);
+    const cards: ShelfCard[] = [];
+    for (const line of out.split(/\r?\n/)) {
+      const t = line.trim().split(/\s+/);
+      // Rack Shelf Slot CfgType RealType Port [HardVer] [SoftVer] Status
+      if (t.length < 7) continue;
+      if (!/^\d+$/.test(t[0]) || !/^\d+$/.test(t[1]) || !/^\d+$/.test(t[2])) continue; // skip header/sep/echo
+      const [rack, shelf, slot] = [Number(t[0]), Number(t[1]), Number(t[2])];
+      const cfgType = t[3];
+      const realType = t[4];
+      const ports = /^\d+$/.test(t[5]) ? Number(t[5]) : null;
+      const status = t[t.length - 1];
+      cards.push({ rack, shelf, slot, cfgType, realType, role: cardRole(realType || cfgType), ports, status });
+    }
+    return cards;
+  } finally {
+    session.close();
+  }
+}
+
+/** For every uplink board, read per-port optical DDM. Bounded: the link-state
+ * `show interface` is only issued for ports that actually have a module. Read-only. */
+export async function scanUplinkOptical(creds: OltCreds, cards: ShelfCard[], frame = 1): Promise<ShelfCard[]> {
+  const uplinkCards = cards.filter((c) => c.role === "uplink-xge" || c.role === "uplink-ge");
+  if (!uplinkCards.length) return cards;
+  const session = await login(creds);
+  try {
+    await session.sendCommand("terminal length 0", 500);
+    for (const card of uplinkCards) {
+      const iface = uplinkIface(card.role)!;
+      const n = card.ports && card.ports > 0 ? card.ports : 4;
+      const uplinks: UplinkPort[] = [];
+      for (let port = 1; port <= n; port++) {
+        const name = `${iface}_${frame}/${card.slot}/${port}`;
+        const optical = await readReply(session, `show interface optical-module ${name}`, 4000);
+        const parsed = parseOpticalModule(optical);
+        let up: boolean | null = null;
+        if (parsed.present) {
+          const iout = await readReply(session, `show interface ${name}`, 4000);
+          const m = /is (up|down),\s*line protocol is (up|down)/i.exec(iout);
+          up = m ? m[1].toLowerCase() === "up" && m[2].toLowerCase() === "up" : null;
+        }
+        uplinks.push({ port, name, up, ...parsed });
+      }
+      card.uplinks = uplinks;
+    }
+    return cards;
+  } finally {
+    session.close();
+  }
+}
+
 /** Per-OLT signal sweep, ported from sync_service.py's sync_signals(). */
 export async function scanOltSignals(
   creds: OltCreds,

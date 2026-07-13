@@ -7,7 +7,7 @@ import { ArrowLeft, Server } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OltCardMap } from "@/components/olt-card-map";
+import { OltShelf } from "@/components/olt-shelf";
 import { useOlts } from "../../providers";
 
 // Keep recharts out of the initial per-OLT bundle — the PON chart streams its own chunk.
@@ -67,7 +67,7 @@ export default function OltDetailPage({ params }: { params: Promise<{ id: string
       </div>
 
       <div className="mb-5">
-        <OltCardMap oltId={olt.id} />
+        <OltShelf oltId={olt.id} />
       </div>
     </div>
   );

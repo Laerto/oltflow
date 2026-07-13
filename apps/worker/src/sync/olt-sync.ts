@@ -9,6 +9,8 @@ import {
   scanEponInventory,
   detectOltModel,
   scanOltRegistrationsC300,
+  scanCardInventory,
+  scanUplinkOptical,
   type InventoryRow,
 } from "@oltflow/adapters";
 import { DEFAULT_PORTS_PER_SLOT, DEFAULT_EPON_PORTS_PER_SLOT } from "@oltflow/core";
@@ -143,6 +145,23 @@ export async function syncOlt(oltId: number): Promise<number> {
             if (model) await prisma.olt.update({ where: { id: olt.id }, data: { model } });
           }
           const isC300 = model === "C300";
+
+          // Chassis snapshot (`show card` + uplink optical DDM) — once per detail cycle, and only
+          // when no operator is waiting (it adds ~15-20 short reads under the lock). Best-effort:
+          // a failure here must never break the ONU detail sweep below. Read-only.
+          if (!operatorWaiting) {
+            try {
+              const t0 = Date.now();
+              let cards = await scanCardInventory(creds);
+              cards = await scanUplinkOptical(creds, cards);
+              // Round-trip through JSON so Prisma's Json input sees no `undefined` (invalid in JSON).
+              const shelf = JSON.parse(JSON.stringify({ at: new Date().toISOString(), cards }));
+              await prisma.olt.update({ where: { id: olt.id }, data: { shelf } });
+              log.info({ oltId, cards: cards.length, ms: Date.now() - t0 }, "shelf: read");
+            } catch (err) {
+              log.warn({ oltId, err: (err as Error).message }, "shelf: read failed");
+            }
+          }
 
           const cursorKey = `sync:det:cursor:${oltId}`;
           let startAt = Number(await kv.get(cursorKey)) || 0;

@@ -28,6 +28,7 @@ model Olt {
   longitude   Float?
   status      String    @default("unknown") // online | offline | unknown
   lastSync    DateTime?
+  shelf       Json?     // chassis snapshot: `show card` inventory + uplink optical DDM (see scanCardInventory/scanUplinkOptical)
   onus        Onu[]
   uncfgOnus   UncfgOnu[]
   jobs        Job[]
