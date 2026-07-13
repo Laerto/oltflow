@@ -66,3 +66,14 @@ export function onuConnectionKind(type: string | null | undefined): "bridge" | "
   if (model.startsWith("F612") || model.startsWith("F601") || model.startsWith("F401")) return "bridge";
   return "route";
 }
+
+/** Physical port layout by ONU model, for the port diagram on the ONU page:
+ *  F601 / F401 → 1 Ethernet · F612 → 2 Ethernet (all bridge, no WiFi);
+ *  routed HGUs (F673AV9, F660, F670L, F6600P, …) → 4 Ethernet + WiFi. */
+export function onuPortLayout(type: string | null | undefined): { eth: number; wifi: boolean } {
+  const model = (type ?? "").trim().toUpperCase().replace(/^ZTE-/, "");
+  if (model.startsWith("F601") || model.startsWith("F401")) return { eth: 1, wifi: false };
+  if (model.startsWith("F612")) return { eth: 2, wifi: false };
+  if (onuConnectionKind(type) === "route") return { eth: 4, wifi: true };
+  return { eth: 1, wifi: false };
+}

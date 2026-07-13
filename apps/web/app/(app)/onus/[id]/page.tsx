@@ -14,6 +14,7 @@ import {
   Lock,
   MoreHorizontal,
   Pencil,
+  EthernetPort,
   Power,
   RefreshCw,
   Router,
@@ -45,7 +46,7 @@ import { TicketModal } from "@/components/ticket-modal";
 import { OnuCpePanel } from "@/components/onu-cpe-panel";
 import { useMe } from "@/app/(app)/providers";
 import { can } from "@/lib/permissions";
-import { isEponPort, onuConnectionKind, classifySignal } from "@oltflow/core";
+import { isEponPort, onuConnectionKind, onuPortLayout, classifySignal } from "@oltflow/core";
 
 // The live traffic panel pulls in recharts — load it only when this page mounts,
 // as its own chunk, so the ONU detail shell paints without it.
@@ -313,6 +314,28 @@ export default function OnuDetailPage() {
             <MiniField label="Service Profile" value={<Badge>{onu.serviceProfile || "N/A"}</Badge>} />
             <MiniField label="Online" value={<span className="text-emerald-600">{onu.onlineDuration || "N/A"}</span>} />
             <MiniField label="Serial" value={<span className="font-mono text-xs">{onu.serial || "N/A"}</span>} />
+            <div className="col-span-2 mt-1.5 flex items-center gap-3 border-t border-border/40 pt-2.5">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Portat fizike</span>
+              {(() => {
+                const p = onuPortLayout(onu.type);
+                return (
+                  <div className="flex items-center gap-2.5">
+                    {Array.from({ length: p.eth }).map((_, i) => (
+                      <span key={i} className="flex flex-col items-center gap-0.5" title={`Ethernet LAN${i + 1}`}>
+                        <EthernetPort className="h-5 w-5 text-blue-600" />
+                        <span className="text-[8px] text-muted-foreground">LAN{i + 1}</span>
+                      </span>
+                    ))}
+                    {p.wifi && (
+                      <span className="flex flex-col items-center gap-0.5" title="Antenë WiFi">
+                        <Wifi className="h-5 w-5 text-emerald-600" />
+                        <span className="text-[8px] text-muted-foreground">WiFi</span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </SectionCard>
 
