@@ -391,7 +391,7 @@ export default function OnuDetailPage() {
 
       {/* ACS / TR-069 panel — direkt poshtë ONU Information; menaxhon SSID/pass/on-off të CPE-së. */}
       <SectionCard title={<><Router className="inline h-4 w-4" /> CPE / ACS (TR-069)</>} className="mt-4">
-        <div className="p-4">
+        <div className="px-4 pb-4">
           <OnuCpePanel onuId={onu.id} canOperate={operate} />
         </div>
       </SectionCard>
@@ -523,7 +523,7 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <Card className={cn("border-border/70 py-4 shadow-sm", className)}>
+    <Card className={cn("gap-0 border-border/70 py-4 shadow-sm", className)}>
       <div className="flex items-start justify-between gap-4 px-4 pb-3">
         <div className="font-semibold leading-none">{title}</div>
         {action ? <div className="shrink-0">{action}</div> : null}
