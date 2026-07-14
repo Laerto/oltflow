@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useEffect } from "react";
+import { use, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Server } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -22,13 +23,25 @@ const PonTrafficCard = dynamic(
 export default function OltDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const oltId = Number(id);
-  const { olts, loading, setCurrentOltId } = useOlts();
+  const router = useRouter();
+  const { olts, loading, currentOlt, setCurrentOltId } = useOlts();
   const olt = olts.find((o) => o.id === oltId) ?? null;
 
   // Keep the global OLT selector in sync so the sidebar/header reflect this OLT.
   useEffect(() => {
     if (olt) setCurrentOltId(olt.id);
   }, [olt, setCurrentOltId]);
+
+  // Follow the header OLT selector: once the selector has matched this page's OLT (in sync), a
+  // later change means the operator picked a different OLT → navigate to its detail page. The
+  // `inSync` guard prevents a wrong redirect on mount when the persisted selection differs from
+  // the URL (that first pass syncs instead of navigating).
+  const inSync = useRef(false);
+  useEffect(() => {
+    const curId = currentOlt?.id ?? null;
+    if (curId === oltId) inSync.current = true;
+    else if (inSync.current && curId != null) router.push(`/olts/${curId}`);
+  }, [currentOlt, oltId, router]);
 
   if (loading) {
     return (
