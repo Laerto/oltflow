@@ -29,6 +29,12 @@ const SIGNAL_ALARMS_ENABLED = process.env.SIGNAL_ALARMS_ENABLED === "true";
 // card fault), which stays on. Flip ONU_OFFLINE_ALARMS_ENABLED=true to restore per-ONU alarms.
 const ONU_OFFLINE_ALARMS_ENABLED = process.env.ONU_OFFLINE_ALARMS_ENABLED === "true";
 
+// Expiry is a billing worklist, not a network incident — it already lives in the dashboard
+// "Skadojnë" panel and the WhatsApp reminders, so it's OFF as a bell/Telegram alarm by default.
+// The Skadojnë panel reads its own data (stats.expiring), so this doesn't affect it. Flip
+// EXPIRY_ALARMS_ENABLED=true to restore expiry alarms.
+const EXPIRY_ALARMS_ENABLED = process.env.EXPIRY_ALARMS_ENABLED === "true";
+
 /**
  * Alarm tick:
  *  1. SQL-side / chunked scans find ONUs/OLTs/ports that cross thresholds.
@@ -384,8 +390,10 @@ export async function checkAlarms(): Promise<number> {
   }
 
   // ── 4) Expiry ────────────────────────────────────────────────────────────
+  // Generation gated by EXPIRY_ALARMS_ENABLED (default off); the clear pass below always runs so
+  // previously-open expiry alarms are purged. Expiry still shows in the dashboard "Skadojnë" panel.
   cursor = 0;
-  for (;;) {
+  for (; EXPIRY_ALARMS_ENABLED; ) {
     const rows = await prisma.onu.findMany({
       where: { id: { gt: cursor }, expiration: { lte: expiryCutoff } },
       orderBy: { id: "asc" },

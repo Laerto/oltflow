@@ -119,7 +119,7 @@ function SignalChip({
   pct: number;
 }) {
   return (
-    <Link href={href} className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition hover:bg-muted/60">
+    <Link href={href} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-xs transition hover:bg-muted/60">
       <span className={`h-2 w-2 rounded-full ${DOT_TONE[tone]}`} />
       <span className="font-medium text-foreground">{label}</span>
       <span className="font-bold tabular-nums text-foreground">{value}</span>
@@ -239,10 +239,19 @@ export default function DashboardPage() {
                 <div className="bg-amber-500" style={{ width: `${signalMix.pct(signalMix.warning)}%` }} />
                 <div className="bg-rose-500" style={{ width: `${signalMix.pct(signalMix.critical)}%` }} />
               </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-2">
-                <SignalChip href="/onus?signal=good" tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
-                <SignalChip href="/onus?signal=warning" tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
-                <SignalChip href="/onus?signal=critical" tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
+              {/* Each label sits under its own bar segment: cell widths mirror the bar so
+                  Good aligns to the green (left), Warning to the amber (centre), Critical to
+                  the rose (right). */}
+              <div className="mt-1.5 flex text-xs">
+                <div style={{ flex: `0 0 ${signalMix.pct(signalMix.good)}%` }} className="flex justify-start">
+                  <SignalChip href="/onus?signal=good" tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
+                </div>
+                <div style={{ flex: `0 0 ${signalMix.pct(signalMix.warning)}%` }} className="flex justify-center">
+                  <SignalChip href="/onus?signal=warning" tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
+                </div>
+                <div style={{ flex: `0 0 ${signalMix.pct(signalMix.critical)}%` }} className="flex justify-end">
+                  <SignalChip href="/onus?signal=critical" tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
+                </div>
               </div>
             </div>
 
