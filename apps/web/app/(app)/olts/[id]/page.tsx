@@ -63,7 +63,9 @@ export default function OltDetailPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div>
+    // key by OLT id: switching OLT fully remounts the cards, guaranteeing fresh data (belt-and-
+    // suspenders on top of the per-card oltId refetch).
+    <div key={olt.id}>
       <div className="mb-5">
         <Link href="/dashboard" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
