@@ -12,7 +12,6 @@ import {
   Loader2,
   Cloud,
   Lock,
-  MoreHorizontal,
   Pencil,
   EthernetPort,
   Power,
@@ -23,13 +22,6 @@ import {
   Wrench,
   MapPin,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { RenameOnuModal } from "@/components/rename-onu-modal";
 import { api, ApiError, pollJob, type OnuRow, type WifiDevice } from "@/lib/api";
 import { stateBadgeColor } from "@/lib/ui-helpers";
@@ -244,39 +236,6 @@ export default function OnuDetailPage() {
               {acsBusy ? <Spinner /> : <Cloud className="h-4 w-4" />} ACS
             </Button>
           )}
-          {operate && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" title="Më shumë veprime" aria-label="Më shumë veprime">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuItem onClick={doReboot} disabled={rebooting || !wifi?.deviceId}>
-                  <Power className="h-4 w-4" /> Reboot ONU
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTicketOpen(true)}>
-                  <Wrench className="h-4 w-4" /> Hap tiket
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={doWanAccess} disabled={wanBusy || epon}>
-                  <Globe className="h-4 w-4" /> Akses WAN
-                </DropdownMenuItem>
-                {admin && (
-                  <DropdownMenuItem onClick={() => setReplaceOpen(true)} disabled={epon}>
-                    <RefreshCw className="h-4 w-4" /> Zëvendëso ONU
-                  </DropdownMenuItem>
-                )}
-                {admin && !epon && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive">
-                      <Trash2 className="h-4 w-4" /> Fshi ONU
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
       </div>
 
@@ -481,6 +440,32 @@ export default function OnuDetailPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </SectionCard>
+      )}
+
+      {operate && (
+        <SectionCard title={<><Power className="inline h-4 w-4" /> Veprime</>} className="mt-4">
+          <div className="flex flex-wrap gap-2 p-4">
+            <Button onClick={doReboot} disabled={rebooting || !wifi?.deviceId} className="bg-amber-500 text-white hover:bg-amber-600" title={wifi?.deviceId ? "Rindiz ONU-n (~1-2 min offline)" : "Reboot kërkon ACS/TR-069 aktiv"}>
+              {rebooting ? <Spinner /> : <Power className="h-4 w-4" />} Reboot
+            </Button>
+            <Button variant="outline" onClick={doWanAccess} disabled={wanBusy || epon} title="Hap akses WAN te CPE">
+              {wanBusy ? <Spinner /> : <Globe className="h-4 w-4" />} Akses WAN
+            </Button>
+            <Button variant="outline" onClick={() => setTicketOpen(true)} title="Hap tiket riparimi për teknikun">
+              <Wrench className="h-4 w-4" /> Hap tiket
+            </Button>
+            {admin && (
+              <Button variant="outline" onClick={() => setReplaceOpen(true)} disabled={epon} title="Zëvendëso ONU-n me një serial të ri (ruaj konfigurimin)">
+                <RefreshCw className="h-4 w-4" /> Zëvendëso
+              </Button>
+            )}
+            {admin && !epon && (
+              <Button variant="destructive" onClick={() => setDeleteOpen(true)} className="ml-auto" title="Fshi ONU-n nga OLT-ja">
+                <Trash2 className="h-4 w-4" /> Fshi ONU
+              </Button>
+            )}
           </div>
         </SectionCard>
       )}
