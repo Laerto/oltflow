@@ -44,6 +44,7 @@ import { DeleteOnuDialog } from "@/components/delete-onu-dialog";
 import { PingButton } from "@/components/ping-button";
 import { TicketModal } from "@/components/ticket-modal";
 import { OnuCpePanel } from "@/components/onu-cpe-panel";
+import { OnuSignalHistory } from "@/components/onu-signal-history";
 import { useMe } from "@/app/(app)/providers";
 import { can } from "@/lib/permissions";
 import { isEponPort, onuConnectionKind, onuPortLayout, classifySignal } from "@oltflow/core";
@@ -445,6 +446,10 @@ export default function OnuDetailPage() {
           lastCause={live?.history?.[live.history.length - 1]?.cause}
         />
       )}
+
+      <div className="mt-4">
+        <OnuSignalHistory onuId={onu.id} thresholds={onu.signalThresholds} />
+      </div>
 
       {live?.history && (
         <SectionCard title={<><CalendarDays className="inline h-4 w-4" /> Historia e Lidhjes <span className="text-[11px] font-normal text-muted-foreground">{live.history.length} ngjarje</span></>} className="mt-4">
