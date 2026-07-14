@@ -36,7 +36,6 @@ import { DeleteOnuDialog } from "@/components/delete-onu-dialog";
 import { PingButton } from "@/components/ping-button";
 import { TicketModal } from "@/components/ticket-modal";
 import { OnuCpePanel } from "@/components/onu-cpe-panel";
-import { OnuSignalHistory } from "@/components/onu-signal-history";
 import { useMe } from "@/app/(app)/providers";
 import { can } from "@/lib/permissions";
 import { isEponPort, onuConnectionKind, onuPortLayout, classifySignal } from "@oltflow/core";
@@ -45,6 +44,11 @@ import { isEponPort, onuConnectionKind, onuPortLayout, classifySignal } from "@o
 // as its own chunk, so the ONU detail shell paints without it.
 const OnuLivePanel = dynamic(
   () => import("@/components/onu-live-panel").then((m) => m.OnuLivePanel),
+  { ssr: false }
+);
+// recharts-based — stream its own chunk instead of loading recharts in the ONU-page bundle.
+const OnuSignalHistory = dynamic(
+  () => import("@/components/onu-signal-history").then((m) => m.OnuSignalHistory),
   { ssr: false }
 );
 

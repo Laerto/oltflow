@@ -9,13 +9,17 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OltShelf } from "@/components/olt-shelf";
-import { OltHealthCard } from "@/components/olt-health-card";
 import { useOlts } from "../../providers";
 
-// Keep recharts out of the initial per-OLT bundle — the PON chart streams its own chunk.
+// Keep recharts out of the initial per-OLT bundle — the PON chart + health card stream their
+// own chunk, loaded only when this page mounts (not in the shared/app bundle).
 const PonTrafficCard = dynamic(
   () => import("@/components/pon-traffic-card").then((m) => m.PonTrafficCard),
   { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+);
+const OltHealthCard = dynamic(
+  () => import("@/components/olt-health-card").then((m) => m.OltHealthCard),
+  { ssr: false, loading: () => <Skeleton className="h-40 w-full" /> }
 );
 
 /** Specialised per-OLT detail page: the heavier per-PON bandwidth chart and card/port map
