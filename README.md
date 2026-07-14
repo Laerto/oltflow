@@ -37,5 +37,4 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ❯ Check out our [Next.js deployment documentation]
 
-
-we have build a web app for ISPs (Internet Service Providers) for menaging monitoring and troubleshooting devices please i need you to make a deep look and find any missing feature or any thing that is partaly added and start implementing and improving the app step by step read plan.md file to understand the app, also add gmail smtp because we are going to use them in the app
+#ready
