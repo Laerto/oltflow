@@ -154,28 +154,14 @@ export function OnuCpePanel({
   const wifiClients = (Array.isArray(acs.wifiClients) ? acs.wifiClients : []) as WifiClient[];
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-[11px] text-muted-foreground">
-          Mirror: {new Date(acs.mirroredAt).toLocaleString("sq-AL")}
-          {acs.lastInform && <> · last inform {new Date(acs.lastInform).toLocaleString("sq-AL")}</>}
-          {acs.pending && (
-            <Badge variant="outline" className="ml-2 border-amber-500/40 text-amber-600">
-              pret ACS
-            </Badge>
-          )}
-        </div>
-        <Button size="sm" variant="secondary" onClick={refresh} disabled={busy}>
-          <RefreshCw className={`mr-1 h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh from ACS
-        </Button>
-      </div>
+    <div className="space-y-3">
       {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
 
-      {/* WiFi first — SSID/pass + on/off are the office's #1 first-check action */}
-      <Card className="p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-sm font-semibold">
-            <Wifi className="h-4 w-4 text-primary" /> WiFi
+      {/* ── WiFi group (blue header) — the office's #1 first-check action ── */}
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between gap-2 border-b border-blue-500/20 bg-blue-500/[0.06] px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-blue-700 dark:text-blue-400">
+            <Wifi className="h-4 w-4" /> WiFi
           </div>
           {canOperate && acs.deviceId && !acs.pending && (
             <Button size="sm" variant="default" onClick={() => setWifiOpen(true)} disabled={busy}>
@@ -183,7 +169,7 @@ export function OnuCpePanel({
             </Button>
           )}
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 text-xs">
+        <div className="grid gap-2 p-3 text-xs sm:grid-cols-2">
           <WifiBand band="2g" ssid={acs.ssid2g} enabled={acs.wifiEnabled2g} canOperate={canOperate} busy={busy} onToggle={toggleBand} />
           <WifiBand band="5g" ssid={acs.ssid5g} enabled={acs.wifiEnabled5g} canOperate={canOperate} busy={busy} onToggle={toggleBand} />
         </div>
@@ -201,7 +187,7 @@ export function OnuCpePanel({
 
       {wifiClients.length > 0 && (
         <Card className="overflow-hidden">
-          <div className="flex items-center gap-1.5 border-b border-border px-4 py-2.5 text-sm font-semibold">
+          <div className="flex items-center gap-1.5 border-b border-blue-500/20 bg-blue-500/[0.04] px-4 py-2.5 text-sm font-semibold text-blue-700 dark:text-blue-400">
             <Wifi className="h-4 w-4" /> Klientë WiFi të lidhur ({wifiClients.length})
           </div>
           <table className="w-full text-left text-sm">
@@ -232,11 +218,27 @@ export function OnuCpePanel({
         </Card>
       )}
 
+      {/* ── LAN & devices group (emerald header) — ports + connected devices + the ACS
+          metadata (mirror / refresh / device info), all ACS-read, sit together here below WiFi. ── */}
       <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+            <Network className="h-4 w-4" /> LAN &amp; Pajisjet <span className="font-normal text-muted-foreground">(ACS)</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] text-muted-foreground">
+              Mirror {new Date(acs.mirroredAt).toLocaleString("sq-AL")}
+              {acs.pending && <Badge variant="outline" className="ml-1.5 border-amber-500/40 text-amber-600">pret ACS</Badge>}
+            </span>
+            <Button size="sm" variant="secondary" onClick={refresh} disabled={busy}>
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh from ACS
+            </Button>
+          </div>
+        </div>
         {ports.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-muted/30 px-4 py-2">
             <span className="mr-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <Network className="h-3.5 w-3.5" /> Portat LAN
+              <EthernetPort className="h-3.5 w-3.5" /> Portat LAN
             </span>
             {ports.map((p) => (
               <span
@@ -287,15 +289,14 @@ export function OnuCpePanel({
             </tbody>
           </table>
         )}
+        {/* Device info (ACS-read) — compact strip at the foot of the LAN & ACS group */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/20 px-4 py-2 text-xs">
+          <DevItem icon={Router} label="Model" value={acs.modelName || acs.productClass || "—"} />
+          <DevItem icon={Cpu} label="Firmware" value={acs.softwareVersion || "—"} />
+          <DevItem icon={Network} label="WAN" value={acs.wanIp ? `${acs.wanIp}${acs.wanMode ? ` · ${acs.wanMode}` : ""}` : "—"} />
+          <DevItem icon={Cpu} label="Uptime" value={fmtUptime(acs.uptimeSec)} />
+        </div>
       </Card>
-
-      {/* Device info — secondary, compact single strip at the bottom (trims the old 4-card grid) */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs">
-        <DevItem icon={Router} label="Model" value={acs.modelName || acs.productClass || "—"} />
-        <DevItem icon={Cpu} label="Firmware" value={acs.softwareVersion || "—"} />
-        <DevItem icon={Network} label="WAN" value={acs.wanIp ? `${acs.wanIp}${acs.wanMode ? ` · ${acs.wanMode}` : ""}` : "—"} />
-        <DevItem icon={Cpu} label="Uptime" value={fmtUptime(acs.uptimeSec)} />
-      </div>
     </div>
   );
 }
