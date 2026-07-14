@@ -231,26 +231,33 @@ export default function DashboardPage() {
             {/* Signal distribution — compact bar + inline chips */}
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <SignalHigh className="h-4 w-4 text-primary" /> Shpërndarja e sinjaleve
-                <span className="ml-auto text-xs font-normal text-muted-foreground">{signalMix.online} online</span>
+                <SignalHigh className="h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0 truncate">Shpërndarja e sinjaleve</span>
+                <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">{signalMix.online} online</span>
               </div>
-              <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div className="bg-emerald-500" style={{ width: `${signalMix.pct(signalMix.good)}%` }} />
                 <div className="bg-amber-500" style={{ width: `${signalMix.pct(signalMix.warning)}%` }} />
                 <div className="bg-rose-500" style={{ width: `${signalMix.pct(signalMix.critical)}%` }} />
               </div>
-              {/* Each label sits under its own bar segment: cell widths mirror the bar so
-                  Good aligns to the green (left), Warning to the amber (centre), Critical to
-                  the rose (right). */}
-              <div className="mt-1.5 flex text-xs">
-                <div style={{ flex: `0 0 ${signalMix.pct(signalMix.good)}%` }} className="flex justify-start">
+              {/* Legend — mobile: a simple wrapped row that never spills past the card; sm+: each
+                  label sits under its own bar segment (cell widths mirror the bar). */}
+              <div className="mt-1.5 overflow-hidden">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 sm:hidden">
                   <SignalChip href="/onus?signal=good" tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
-                </div>
-                <div style={{ flex: `0 0 ${signalMix.pct(signalMix.warning)}%` }} className="flex justify-center">
                   <SignalChip href="/onus?signal=warning" tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
-                </div>
-                <div style={{ flex: `0 0 ${signalMix.pct(signalMix.critical)}%` }} className="flex justify-end">
                   <SignalChip href="/onus?signal=critical" tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
+                </div>
+                <div className="hidden text-xs sm:flex">
+                  <div style={{ flex: `0 0 ${signalMix.pct(signalMix.good)}%` }} className="flex min-w-0 justify-start">
+                    <SignalChip href="/onus?signal=good" tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
+                  </div>
+                  <div style={{ flex: `0 0 ${signalMix.pct(signalMix.warning)}%` }} className="flex min-w-0 justify-center">
+                    <SignalChip href="/onus?signal=warning" tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
+                  </div>
+                  <div style={{ flex: `0 0 ${signalMix.pct(signalMix.critical)}%` }} className="flex min-w-0 justify-end">
+                    <SignalChip href="/onus?signal=critical" tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
+                  </div>
                 </div>
               </div>
             </div>
