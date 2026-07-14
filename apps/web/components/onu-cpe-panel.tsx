@@ -154,9 +154,9 @@ export function OnuCpePanel({
   const wifiClients = (Array.isArray(acs.wifiClients) ? acs.wifiClients : []) as WifiClient[];
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs text-muted-foreground">
+        <div className="text-[11px] text-muted-foreground">
           Mirror: {new Date(acs.mirroredAt).toLocaleString("sq-AL")}
           {acs.lastInform && <> · last inform {new Date(acs.lastInform).toLocaleString("sq-AL")}</>}
           {acs.pending && (
@@ -165,25 +165,17 @@ export function OnuCpePanel({
             </Badge>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="secondary" onClick={refresh} disabled={busy}>
-            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh from ACS
-          </Button>
-        </div>
+        <Button size="sm" variant="secondary" onClick={refresh} disabled={busy}>
+          <RefreshCw className={`mr-1 h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh from ACS
+        </Button>
       </div>
       {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Mini label="Model" value={acs.modelName || acs.productClass || "—"} icon={Router} />
-        <Mini label="Firmware" value={acs.softwareVersion || "—"} icon={Cpu} />
-        <Mini label="WAN" value={acs.wanIp ? `${acs.wanIp}${acs.wanMode ? ` · ${acs.wanMode}` : ""}` : "—"} icon={Network} />
-        <Mini label="Uptime" value={fmtUptime(acs.uptimeSec)} icon={Cpu} />
-      </div>
-
+      {/* WiFi first — SSID/pass + on/off are the office's #1 first-check action */}
       <Card className="p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold">
-            <Wifi className="h-3.5 w-3.5" /> WiFi
+          <div className="flex items-center gap-1.5 text-sm font-semibold">
+            <Wifi className="h-4 w-4 text-primary" /> WiFi
           </div>
           {canOperate && acs.deviceId && !acs.pending && (
             <Button size="sm" variant="default" onClick={() => setWifiOpen(true)} disabled={busy}>
@@ -296,7 +288,25 @@ export function OnuCpePanel({
           </table>
         )}
       </Card>
+
+      {/* Device info — secondary, compact single strip at the bottom (trims the old 4-card grid) */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs">
+        <DevItem icon={Router} label="Model" value={acs.modelName || acs.productClass || "—"} />
+        <DevItem icon={Cpu} label="Firmware" value={acs.softwareVersion || "—"} />
+        <DevItem icon={Network} label="WAN" value={acs.wanIp ? `${acs.wanIp}${acs.wanMode ? ` · ${acs.wanMode}` : ""}` : "—"} />
+        <DevItem icon={Cpu} label="Uptime" value={fmtUptime(acs.uptimeSec)} />
+      </div>
     </div>
+  );
+}
+
+function DevItem({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold text-foreground" title={value}>{value}</span>
+    </span>
   );
 }
 
@@ -343,23 +353,3 @@ function WifiBand({
   );
 }
 
-function Mini({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="p-3">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground">
-        <Icon className="h-3 w-3" /> {label}
-      </div>
-      <div className="mt-1 truncate text-sm font-semibold" title={value}>
-        {value}
-      </div>
-    </Card>
-  );
-}
