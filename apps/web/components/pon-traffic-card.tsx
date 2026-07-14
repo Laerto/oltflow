@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Gauge } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
+import { useCached } from "@/lib/use-cached";
 
 interface Port {
   ponPort: string;
@@ -28,26 +28,11 @@ function fmtBps(bps: number): string {
 const shortPort = (p: string) => p.replace(/^e?gpon_/i, "").replace(/^epon_/i, "");
 
 export function PonTrafficCard({ oltId }: { oltId: number }) {
-  const [available, setAvailable] = useState<boolean | null>(null);
-  const [ports, setPorts] = useState<Port[]>([]);
-  const [series, setSeries] = useState<Point[]>([]);
-
-  const refresh = useCallback(() => {
-    api
-      .ponTraffic(oltId)
-      .then((r) => {
-        setAvailable(r.available);
-        setPorts(r.ports);
-        setSeries(r.series);
-      })
-      .catch(() => setAvailable(false));
-  }, [oltId]);
-
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 30_000);
-    return () => clearInterval(id);
-  }, [refresh]);
+  // Cached + 30s refresh: switching back to this OLT shows its last bandwidth instantly.
+  const { data: raw } = useCached(`pon-traffic:${oltId}`, () => api.ponTraffic(oltId), { refreshMs: 30_000 });
+  const available: boolean | null = raw === undefined ? null : raw.available;
+  const ports: Port[] = raw?.ports ?? [];
+  const series: Point[] = raw?.series ?? [];
 
   const totalDown = ports.reduce((s, p) => s + p.downBps, 0);
   const totalUp = ports.reduce((s, p) => s + p.upBps, 0);

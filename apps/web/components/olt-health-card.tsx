@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { Cpu, Thermometer, CircuitBoard, type LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { useCached } from "@/lib/use-cached";
 
 interface CardHealth {
   slot: number;
@@ -117,24 +117,10 @@ export function OltHealthCard({
   bare?: boolean;
   showCards?: boolean;
 }) {
-  const [data, setData] = useState<Health | null>(null);
-  const [available, setAvailable] = useState<boolean | null>(null);
-
-  const refresh = useCallback(() => {
-    api
-      .oltHealth(oltId)
-      .then((r) => {
-        setAvailable(r.available);
-        if (r.available) setData(r as Health);
-      })
-      .catch(() => setAvailable(false));
-  }, [oltId]);
-
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 30_000);
-    return () => clearInterval(id);
-  }, [refresh]);
+  // Cached + auto-refreshed every 30s: switching back to this OLT shows the last health instantly.
+  const { data: raw } = useCached(`health:${oltId}`, () => api.oltHealth(oltId), { refreshMs: 30_000 });
+  const available: boolean | null = raw === undefined ? null : raw.available;
+  const data: Health | null = raw && raw.available ? (raw as Health) : null;
 
   const cards = data?.cards ?? [];
   const busiest = cards.reduce<CardHealth | null>((m, c) => (!m || c.cpu > m.cpu ? c : m), null);

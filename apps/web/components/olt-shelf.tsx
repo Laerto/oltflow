@@ -1,35 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Cpu, RefreshCw, Zap, Radio, Server, Battery, ArrowUpFromLine } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { api, type ShelfCard, type UplinkPort, type CardRole } from "@/lib/api";
+import { useCached } from "@/lib/use-cached";
 
 /** NetNumen-style chassis: every board from `show card` + live per-card ONU counts (GPON/EPON)
  * and uplink optical signal levels (XGE/GE), colour-coded by DDM threshold. */
 export function OltShelf({ oltId }: { oltId: number }) {
-  const [data, setData] = useState<{ at: string | null; cards: ShelfCard[] } | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { at, cards } = await api.oltShelf(oltId);
-      setData({ at, cards });
-    } catch {
-      setData({ at: null, cards: [] });
-    } finally {
-      setLoading(false);
-    }
-  }, [oltId]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
-  }, [load]);
+  // Cached: revisiting/switching to this OLT shows the last chassis instantly, then revalidates.
+  const { data, loading, revalidate } = useCached(`shelf:${oltId}`, () =>
+    api.oltShelf(oltId).catch(() => ({ name: "", at: null as string | null, cards: [] as ShelfCard[] }))
+  );
+  const load = revalidate;
 
   return (
     <Card>
@@ -50,7 +36,7 @@ export function OltShelf({ oltId }: { oltId: number }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-2.5">
-        {data === null ? (
+        {data === undefined ? (
           <Skeleton className="h-40 w-full" />
         ) : data.cards.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">Nuk ka të dhëna të shasisë ende — pritet sinkronizimi i parë.</div>

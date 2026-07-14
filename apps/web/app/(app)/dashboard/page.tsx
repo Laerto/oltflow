@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -59,6 +59,7 @@ function Sparkline({ data }: { data: number[] }) {
 }
 import { useOlts } from "../providers";
 import { api, type AuditEntry } from "@/lib/api";
+import { useCached } from "@/lib/use-cached";
 
 interface ExpiringClient {
   id: number;
@@ -130,35 +131,19 @@ function SignalChip({
 
 export default function DashboardPage() {
   const { currentOlt, allOlts, loading: oltsLoading } = useOlts();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [waiting, setWaiting] = useState(0);
+  const oltId = currentOlt?.id ?? null;
+  // Cached + 30s refresh, so switching OLT / revisiting the dashboard shows the last figures
+  // instantly (no skeleton flash) while fresh numbers load in the background. Cheap DB-only reads.
+  const { data: stats } = useCached(oltId != null ? `stats:${oltId}` : null, () => api.stats(oltId!), { refreshMs: 30_000 });
+  const { data: auditData } = useCached(oltId != null ? `audit:${oltId}` : null, () => api.audit(oltId!), { refreshMs: 30_000 });
+  const { data: uncfgData } = useCached(oltId != null ? `uncfg:${oltId}` : null, () => api.unconfigured(oltId!), { refreshMs: 30_000 });
+  const activity: AuditEntry[] = auditData?.logs ?? [];
+  const waiting = uncfgData?.total ?? 0;
+
   const [history, setHistory] = useState<{ on: number }[]>(Array(20).fill({ on: 0 }));
-  const [activity, setActivity] = useState<AuditEntry[]>([]);
-
-  // Cheap, DB-only reads — safe to poll often. The "waiting authorization" count comes
-  // from the persisted unconfigured set (kept current by the worker's inventory sync), so
-  // it's always accurate without a live `show gpon onu uncfg` scan from the browser.
-  const refresh = useCallback(async () => {
-    if (!currentOlt) return;
-    // Each card is fetched independently — a failure in one (e.g. the unconfigured
-    // endpoint) must never blank the others, so we don't await them together.
-    const oltId = currentOlt.id;
-    api
-      .stats(oltId)
-      .then((statsRes) => {
-        setStats(statsRes);
-        setHistory((prev) => [...prev.slice(1), { on: statsRes.online }]);
-      })
-      .catch(() => {});
-    api.audit(oltId).then((r) => setActivity(r.logs)).catch(() => {});
-    api.unconfigured(oltId).then((r) => setWaiting(r.total)).catch(() => {});
-  }, [currentOlt]);
-
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 30_000);
-    return () => clearInterval(id);
-  }, [refresh]);
+    if (stats) setHistory((prev) => [...prev.slice(1), { on: stats.online }]);
+  }, [stats]);
 
   // Signal mix across the online fleet. warning/critical are measured (last 10 min);
   // "good" is the remaining online ONUs. Clamped so a stale count can't go negative.
