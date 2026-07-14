@@ -240,25 +240,12 @@ export default function DashboardPage() {
                 <div className="bg-amber-500" style={{ width: `${signalMix.pct(signalMix.warning)}%` }} />
                 <div className="bg-rose-500" style={{ width: `${signalMix.pct(signalMix.critical)}%` }} />
               </div>
-              {/* Legend — mobile: a simple wrapped row that never spills past the card; sm+: each
-                  label sits under its own bar segment (cell widths mirror the bar). */}
-              <div className="mt-1.5 overflow-hidden">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 sm:hidden">
-                  <SignalChip href="/onus?signal=good" tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
-                  <SignalChip href="/onus?signal=warning" tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
-                  <SignalChip href="/onus?signal=critical" tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
-                </div>
-                <div className="hidden text-xs sm:flex">
-                  <div style={{ flex: `0 0 ${signalMix.pct(signalMix.good)}%` }} className="flex min-w-0 justify-start">
-                    <SignalChip href="/onus?signal=good" tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
-                  </div>
-                  <div style={{ flex: `0 0 ${signalMix.pct(signalMix.warning)}%` }} className="flex min-w-0 justify-center">
-                    <SignalChip href="/onus?signal=warning" tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
-                  </div>
-                  <div style={{ flex: `0 0 ${signalMix.pct(signalMix.critical)}%` }} className="flex min-w-0 justify-end">
-                    <SignalChip href="/onus?signal=critical" tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
-                  </div>
-                </div>
+              {/* Legend — Good left, Warning centre, Critical right: tracks the bar's
+                  green→amber→rose order and never overflows or collapses (e.g. 100% good). */}
+              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 overflow-hidden">
+                <SignalChip href="/onus?signal=good" tone="emerald" label="Good" value={signalMix.good} pct={signalMix.pct(signalMix.good)} />
+                <SignalChip href="/onus?signal=warning" tone="amber" label="Warning" value={signalMix.warning} pct={signalMix.pct(signalMix.warning)} />
+                <SignalChip href="/onus?signal=critical" tone="rose" label="Critical" value={signalMix.critical} pct={signalMix.pct(signalMix.critical)} />
               </div>
             </div>
 
