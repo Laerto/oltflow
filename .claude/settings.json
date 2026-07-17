@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rn \"onuId\\\\|nextOnu\\\\|freeIndex\\\\|findFree\\\\|:1\\\\|max\\\\|:\\\\${\\\\|ponPort\\\\|count\\\\|findMany\\\\|_onu\" apps/web/app/api/provision)",
+      "Bash(grep -nE \"onuId|:1|:\\\\${|nextOnu|free|find|gpon-onu|gpon-olt|ponPort|max|scanOlt\")",
+      "Bash(grep -nE \"onu |onuId|:\\\\${|index|sn |type \")",
+      "Bash(cd /srv/oltflow *)"
+    ],
+    "additionalDirectories": [
+      "/srv/oltflow/packages/core/src",
+      "/srv/oltflow/packages/adapters/src"
+    ]
+  }
+}

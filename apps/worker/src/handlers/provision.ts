@@ -29,7 +29,9 @@ export async function handleProvision(payload: ProvisionPayload) {
         oltId: payload.oltId,
         OR: [
           { serial: { equals: payload.onuSerial, mode: "insensitive" } },
-          { ponPort: payload.ponPort },
+          // The real authorized interface (free index) — NOT payload.ponPort, whose uncfg
+          // placeholder `:1` would match the existing customer at index 1.
+          { ponPort: onuInterface },
         ],
       },
       select: { id: true },
@@ -43,7 +45,7 @@ export async function handleProvision(payload: ProvisionPayload) {
   }).catch(() => {});
 
   return {
-    message: `ONU ${payload.onuSerial} u autorizua në ${payload.ponPort}`,
+    message: `ONU ${payload.onuSerial} u autorizua në ${onuInterface}`,
     onuInterface,
     output: sanitizeOutput(output),
   };

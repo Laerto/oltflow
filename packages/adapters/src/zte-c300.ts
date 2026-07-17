@@ -708,18 +708,43 @@ function ensureApplied(output: string, pon: PonPort): { output: string; onuInter
   return { output, onuInterface: onuInterface(pon) };
 }
 
+/**
+ * GPON: pick the first FREE onu-id on a PON port before authorizing. `show gpon onu uncfg` reports a
+ * placeholder `:1` for EVERY unconfigured ONU, so authorizing at that index silently reconfigures
+ * whatever customer already sits at index 1 on the port — this once took a live business (an F601 at
+ * :1) offline. Read the port's running-config, collect the bound `onu N`, and return the lowest free
+ * index. Mirror of the EPON logic (authorizeEponOnu) which already did this. If the running-config
+ * can't be read (no `interface gpon-olt` header), THROW rather than default to :1 and risk an
+ * overwrite. Read-only.
+ */
+async function pickFreeGponOnuId(session: CliSession, pon: Pick<PonPort, "frame" | "slot" | "port">): Promise<number> {
+  await session.sendCommand("terminal length 0", 500);
+  const olt = `gpon-olt_${pon.frame}/${pon.slot}/${pon.port}`;
+  const cfg = await readReply(session, `show running-config interface ${olt}`, 6000);
+  if (!/interface\s+gpon-olt/i.test(cfg)) {
+    throw new Error(`Nuk u lexua konfigurimi i ${olt} — s'u caktua dot indeks i lirë (autorizimi u ndal për siguri)`);
+  }
+  const used = new Set<number>();
+  for (const m of cfg.matchAll(/^\s*onu (\d+) type /gim)) used.add(Number(m[1]));
+  let free = 1;
+  while (used.has(free)) free++;
+  return free;
+}
+
 export async function authorizeOnu(
   creds: OltCreds,
   params: AuthorizeOnuParams
 ): Promise<{ output: string; onuInterface: string }> {
   const session = await login(creds);
   try {
-    const commands = buildAuthorizeOnuCommands(params);
+    // Override the uncfg placeholder index with the first free one (see pickFreeGponOnuId).
+    const pon: PonPort = { ...params.pon, onuId: await pickFreeGponOnuId(session, params.pon) };
+    const commands = buildAuthorizeOnuCommands({ ...params, pon });
     let output = await runCommandSequence(session, commands);
     output += await session.sendCommand("!", 1200);
     output += await session.sendCommand("end", 1200);
     output += await session.sendCommand("write", 2000);
-    return ensureApplied(output, params.pon);
+    return ensureApplied(output, pon);
   } finally {
     session.close();
   }
@@ -956,12 +981,15 @@ export async function authorizeAndPppoe(
 ): Promise<{ output: string; onuInterface: string }> {
   const session = await login(creds);
   try {
-    const commands = buildAuthorizeAndPppoeCommands(params);
+    // Override the uncfg placeholder index with the first free one (see pickFreeGponOnuId) so a new
+    // ONU is never authorized on top of an existing customer at index 1.
+    const pon: PonPort = { ...params.pon, onuId: await pickFreeGponOnuId(session, params.pon) };
+    const commands = buildAuthorizeAndPppoeCommands({ ...params, pon });
     let output = await runCommandSequence(session, commands);
     output += await session.sendCommand("!", 1200);
     output += await session.sendCommand("end", 1200);
     output += await session.sendCommand("write", 2000);
-    return ensureApplied(output, params.pon);
+    return ensureApplied(output, pon);
   } finally {
     session.close();
   }

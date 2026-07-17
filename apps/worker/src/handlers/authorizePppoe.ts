@@ -31,7 +31,9 @@ export async function handleAuthorizePppoe(payload: AuthorizePppoePayload) {
         oltId: payload.oltId,
         OR: [
           { serial: { equals: payload.onuSerial, mode: "insensitive" } },
-          { ponPort: payload.ponPort },
+          // The real authorized interface (free index) — NOT payload.ponPort, whose uncfg
+          // placeholder `:1` would match the existing customer at index 1.
+          { ponPort: onuInterface },
         ],
       },
       select: { id: true },
