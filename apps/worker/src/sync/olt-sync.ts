@@ -79,11 +79,16 @@ async function detailIntervalMs(): Promise<number> {
  * tick. On-demand user jobs keep their own longer lock wait, so they win the lock between
  * ticks.
  */
-export async function syncOlt(oltId: number): Promise<number> {
+export async function syncOlt(oltId: number, opts?: { force?: boolean }): Promise<number> {
+  // `force` = a user-triggered "Resync now": run ALL passes (state+signal+detail) immediately,
+  // ignoring the due-timers, and grab the lock as an interactive command so it preempts background
+  // sweeps. Used to pick up ONUs added/changed from a parallel tool (NetNumen) without waiting for
+  // the ~15-min detail cycle.
+  const force = opts?.force ?? false;
   const olt = await loadOlt(oltId);
   const [sigMs, detMs] = await Promise.all([signalIntervalMs(), detailIntervalMs()]);
-  const wantSignal = await due(`sync:sig:${oltId}`, sigMs);
-  const wantDetail = await due(`sync:det:${oltId}`, detMs);
+  const wantSignal = force || (await due(`sync:sig:${oltId}`, sigMs));
+  const wantDetail = force || (await due(`sync:det:${oltId}`, detMs));
 
   try {
     const count = await withOltLock(
@@ -148,7 +153,7 @@ export async function syncOlt(oltId: number): Promise<number> {
           // longer read here in the slow detail sweep.
 
           const cursorKey = `sync:det:cursor:${oltId}`;
-          let startAt = Number(await kv.get(cursorKey)) || 0;
+          let startAt = force ? 0 : Number(await kv.get(cursorKey)) || 0; // force ⇒ full sweep from slot 0
           if (startAt >= olt.slots.length) startAt = 0; // slot list shrank ⇒ restart from the top
           let slot = startAt;
           let detInterrupted = false;
@@ -184,7 +189,7 @@ export async function syncOlt(oltId: number): Promise<number> {
 
         return stateRows.length;
       },
-      { maxWaitMs: 8000, interactive: false }
+      { maxWaitMs: force ? 30_000 : 8000, interactive: force }
     );
 
     await kv.del(failKey(olt.id)).catch(() => {});

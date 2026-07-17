@@ -50,6 +50,7 @@ export const api = {
   deleteOlt: (id: number) => request<{ ok: boolean }>(`/api/olts/${id}`, { method: "DELETE" }),
   oltPorts: (oltId: number) => request<{ name: string; cards: OltCard[] }>(`/api/olts/${oltId}/ports`),
   oltShelf: (oltId: number) => request<{ name: string; at: string | null; cards: ShelfCard[] }>(`/api/olts/${oltId}/shelf`),
+  resyncOlt: (oltId: number) => request<{ jobId: string }>(`/api/olts/${oltId}/resync`, { method: "POST" }),
   stats: (oltId: number) =>
     request<{
       total: number;

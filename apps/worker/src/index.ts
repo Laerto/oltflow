@@ -58,6 +58,12 @@ const HANDLERS: Record<string, Handler> = {
   [JOB_NAMES.acsRefresh]: handleAcsRefresh,
   [JOB_NAMES.acsFactoryReset]: handleAcsFactoryReset,
   [JOB_NAMES.acsCheckRegistration]: handleAcsCheckRegistration,
+  // User-triggered "Resync now" — forces a full immediate sweep (state+signal+detail) of one OLT so
+  // ONUs added/changed from a parallel tool (NetNumen) appear without waiting for the ~15-min cycle.
+  [JOB_NAMES.resyncOlt]: async (p) => {
+    const count = await syncOlt(p.oltId as number, { force: true });
+    return { message: `Sinkronizim i plotë u krye — ${count} ONU u lexuan`, count };
+  },
 };
 
 // Untracked: driven by the scheduler, no Job row / AuditLog (would flood both). One combined,

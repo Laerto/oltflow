@@ -1,14 +1,16 @@
 "use client";
 
-import { use, useEffect, useRef } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Server } from "lucide-react";
+import { ArrowLeft, Server, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OltShelf } from "@/components/olt-shelf";
+import { api, ApiError, pollJob } from "@/lib/api";
 import { useOlts } from "../../providers";
 
 // Keep recharts out of the initial per-OLT bundle — the PON chart + health card stream their
@@ -47,6 +49,27 @@ export default function OltDetailPage({ params }: { params: Promise<{ id: string
     else if (inSync.current && curId != null) router.push(`/olts/${curId}`);
   }, [currentOlt, oltId, router]);
 
+  // "Resync now": force a full immediate sweep so ONUs added/changed from a parallel tool (NetNumen)
+  // show up at once. On completion, bump `nonce` to remount the cards → they refetch the fresh data.
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  async function doResync() {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const { jobId } = await api.resyncOlt(oltId);
+      const job = await pollJob(jobId);
+      if (job.status === "failed") throw new Error(job.error ?? "Dështoi");
+      setSyncMsg((job.output as { message?: string })?.message ?? "Sinkronizimi u krye.");
+      setNonce((n) => n + 1);
+    } catch (err) {
+      setSyncMsg(err instanceof ApiError || err instanceof Error ? err.message : "Sinkronizimi dështoi");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -69,17 +92,23 @@ export default function OltDetailPage({ params }: { params: Promise<{ id: string
   return (
     // key by OLT id: switching OLT fully remounts the cards, guaranteeing fresh data (belt-and-
     // suspenders on top of the per-card oltId refetch).
-    <div key={olt.id}>
-      <div className="mb-5">
-        <Link href="/dashboard" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
-        </Link>
-        <h1 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-foreground">
-          <Server className="h-5 w-5 text-primary" /> {olt.name}
-        </h1>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {olt.ip} · {olt.location || "–"}
-        </p>
+    <div key={`${olt.id}-${nonce}`}>
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <Link href="/dashboard" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
+          </Link>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight text-foreground">
+            <Server className="h-5 w-5 text-primary" /> {olt.name}
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {olt.ip} · {olt.location || "–"}
+            {syncMsg && <span className="ml-2 text-emerald-600 dark:text-emerald-500">· {syncMsg}</span>}
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={doResync} disabled={syncing} title="Lexo gjithçka tani nga OLT-ja (kap ONU-t e hedhura nga NetNumen)">
+          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Sinkronizohet…" : "Sinkronizo tani"}
+        </Button>
       </div>
 
       <div className="mb-5">
